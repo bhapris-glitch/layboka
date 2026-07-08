@@ -1,0 +1,30 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - bcrypt
+  - mongodb-memory-server
+
+catalog:
+  typescript: ^5.9.2
+  eslint: ^9.35.0
+  prettier: ^3.6.2
+  react: ^19.1.1
+  react-dom: ^19.1.1
+  next: ^15.5.3
+  express: ^5.1.0
+  mongoose: ^8.18.0
+  jsonwebtoken: ^9.0.2
+  bcrypt: ^6.0.0
+  axios: ^1.12.2
+  dotenv: ^17.2.2
+  cors: ^2.8.5
+  helmet: ^8.1.0
+  morgan: ^1.10.1
+  express-rate-limit: ^8.1.0
+  redis: ^5.8.2
+  openai: ^5.20.3
+  stripe: ^18.5.0
