@@ -1,39 +1,61 @@
 # 🚀 Layboka
 
-<div align="center">
+> AI Sales Executive for Shopify Stores
 
-# Layboka AI Sales Executive
-
-Turn Your Shopify Store Into a 24/7 Revenue Machine.
-
-Production-ready AI Sales Executive SaaS Platform for Shopify.
-
-</div>
+Layboka is a production-ready SaaS platform that installs an AI Sales Executive into Shopify stores. It helps merchants increase sales, answer customer questions, recommend products, recover abandoned carts, provide order support, and grow revenue 24/7.
 
 ---
 
-## Features
+# Brand
 
-- 🤖 AI Sales Executive
-- 🛒 Shopify OAuth Installation
-- 💬 GPT Powered Conversations
-- 📈 Store Analytics
-- 🎯 Product Recommendations
-- 💰 Upsell & Cross Sell
-- 🛍 Cart Recovery
-- 🎁 Coupon Engine
-- 🔥 Flash Sale Engine
-- 👥 Visitor Memory
-- 📊 Dashboard
-- 💳 Stripe Subscription Billing
-- 📦 Multi-Store Support
-- 🔐 JWT Authentication
-- ⚡ Real-time Chat
-- 📱 Mobile Responsive
+| Property | Value |
+|----------|-------|
+| Name | Layboka |
+| Primary Color | #FF3B2F |
+| Background | #1E3928 |
+| Frontend | Next.js 15 |
+| Backend | Express.js |
+| Database | MongoDB Atlas |
+| AI | OpenAI |
+| Hosting | Vercel + Railway |
 
 ---
 
-# Technology
+# Features
+
+- AI Sales Executive
+- Shopify OAuth Installation
+- One-Click Store Installation
+- GPT Model Routing
+- Product Recommendation
+- Upsell & Cross Sell
+- Cart Recovery
+- Order Tracking
+- Customer Support
+- Customer Memory
+- Store Analytics
+- Live Dashboard
+- Subscription Billing
+- Enterprise Plan
+- Admin Panel
+- Webhooks
+- Email Notifications
+- Secure Authentication
+
+---
+
+# Pricing
+
+| Plan | Price | AI Model |
+|------|--------|-----------|
+| Starter | $25/month | GPT-4o-mini |
+| Growth | $59/month | GPT-4o-mini |
+| Premium | $149/month | GPT-5 |
+| Enterprise | Contact Sales | GPT-5 (VIP) |
+
+---
+
+# Tech Stack
 
 ## Frontend
 
@@ -42,33 +64,22 @@ Production-ready AI Sales Executive SaaS Platform for Shopify.
 - TypeScript
 - Tailwind CSS
 - Framer Motion
+- React Query
+- React Hook Form
+- Axios
 
 ## Backend
 
-- Node.js
+- Node.js 22
 - Express.js
 - MongoDB
 - Mongoose
-- Redis
 - JWT
-
-## AI
-
-Starter
-
-GPT-4o-mini
-
-Growth
-
-GPT-4o-mini
-
-Premium
-
-GPT-5
-
-Enterprise
-
-GPT-5
+- Shopify API
+- OpenAI API
+- Stripe
+- Redis
+- Socket.IO
 
 ---
 
@@ -76,19 +87,18 @@ GPT-5
 
 ```
 layboka/
-
+│
 ├── apps/
 │   ├── web/
 │   └── api/
 │
 ├── packages/
 │   ├── chatbot-sdk/
-│   ├── ui/
-│   └── shared/
+│   ├── shared/
+│   └── ui/
 │
 ├── docs/
 ├── scripts/
-│
 ├── package.json
 ├── turbo.json
 ├── pnpm-workspace.yaml
@@ -102,15 +112,7 @@ layboka/
 ## Clone Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/layboka.git
-```
-
----
-
-## Install pnpm
-
-```bash
-npm install -g pnpm
+git clone https://github.com/your-org/layboka.git
 ```
 
 ---
@@ -123,6 +125,25 @@ pnpm install
 
 ---
 
+## Configure Environment
+
+Copy the environment template.
+
+```bash
+cp .env.example .env
+```
+
+Fill in:
+
+- MongoDB
+- OpenAI
+- Shopify
+- Stripe
+- Email
+- Redis
+
+---
+
 ## Start Development
 
 ```bash
@@ -131,7 +152,7 @@ pnpm dev
 
 ---
 
-# Production Build
+# Build Production
 
 ```bash
 pnpm build
@@ -139,113 +160,77 @@ pnpm build
 
 ---
 
-# Frontend
+# Deploy
 
-```
-apps/web
-```
+## Frontend
 
-Deploy to
-
-- Vercel
+Deploy **apps/web** to Vercel.
 
 ---
 
-# Backend
+## Backend
 
-```
-apps/api
-```
-
-Deploy to
-
-- Railway
+Deploy **apps/api** to Railway.
 
 ---
 
-# Environment Variables
+## Database
 
-Create
-
-```
-.env
-```
-
-inside
-
-```
-apps/api
-```
-
-Required variables
-
-```
-PORT=
-
-MONGODB_URI=
-
-JWT_SECRET=
-
-OPENAI_API_KEY=
-
-SHOPIFY_API_KEY=
-
-SHOPIFY_API_SECRET=
-
-SHOPIFY_SCOPES=
-
-SHOPIFY_APP_URL=
-
-SHOPIFY_WEBHOOK_SECRET=
-
-STRIPE_SECRET_KEY=
-
-STRIPE_WEBHOOK_SECRET=
-
-EMAIL_HOST=
-
-EMAIL_PORT=
-
-EMAIL_USER=
-
-EMAIL_PASS=
-
-REDIS_URL=
-```
+MongoDB Atlas
 
 ---
 
-# Pricing
+# AI Routing
 
-| Plan | Price | AI Model |
-|------|------:|----------|
-| Starter | $25 | GPT-4o-mini |
-| Growth | $59 | GPT-4o-mini |
-| Premium | $149 | GPT-5 |
-| Enterprise | Contact Sales | GPT-5 |
+Starter
+
+↓
+
+GPT-4o-mini
+
+Growth
+
+↓
+
+GPT-4o-mini
+
+Premium
+
+↓
+
+GPT-5
+
+Enterprise
+
+↓
+
+GPT-5 (VIP)
 
 ---
 
 # Shopify Installation Flow
 
-```
-Merchant
+Merchant enters Shopify store
 
 ↓
 
-Enter Store URL
+Validate store
 
 ↓
 
-OAuth
+Shopify OAuth
 
 ↓
 
-Approve App
+Merchant approves permissions
 
 ↓
 
-Generate Access Token
+Store connected
+
+↓
+
+Install AI Sales Executive
 
 ↓
 
@@ -253,40 +238,41 @@ Register Webhooks
 
 ↓
 
-Inject Layboka AI Sales Executive
-
-↓
-
-Activate Trial
+Create Trial Subscription
 
 ↓
 
 Redirect Dashboard
-```
 
 ---
 
-# Deployment
+# 7-Day Premium Trial
 
-Frontend
+Every new merchant receives:
 
-Vercel
+- Premium AI
+- GPT-5
+- Full Dashboard
+- Analytics
+- AI Sales Executive
 
-Backend
+After 7 days:
 
-Railway
+- Premium features are locked
+- Merchant can upgrade without losing data
 
-Database
+---
 
-MongoDB Atlas
+# Security
 
-Redis
-
-Railway Redis
-
-Storage
-
-Cloudinary
+- JWT Authentication
+- Password Hashing
+- Helmet
+- Rate Limiting
+- CORS
+- Mongo Sanitization
+- Secure Cookies
+- HTTPS Ready
 
 ---
 
@@ -294,6 +280,6 @@ Cloudinary
 
 MIT License
 
-© 2026 Layboka
+Copyright © 2026 Layboka.
 
-All Rights Reserved.
+All rights reserved.
