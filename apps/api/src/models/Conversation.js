@@ -264,13 +264,8 @@ const conversationSchema = new Schema(
     endedAt: {
         type: Date,
         default: null
-    }
+    },
 
-},
-{
-    timestamps: true,
-    versionKey: false
-});
     /*
     |--------------------------------------------------------------------------
     | OpenAI Usage
