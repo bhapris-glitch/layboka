@@ -116,7 +116,7 @@ export const DEFAULT_OPTIONS = Object.freeze({
 
     temperature: 0.7,
 
-    maxTokens: 1500,
+    maxTokens: 300,
 
     topP: 1,
 
@@ -178,7 +178,11 @@ export async function healthCheck() {
 |--------------------------------------------------------------------------
 */
 
-export default openai;
+export default OpenAIService;
+
+export {
+    openai
+};
 /*
 |--------------------------------------------------------------------------
 | Build Request Options
