@@ -547,7 +547,7 @@ const conversationSchema = new Schema(
     upsellRevenue: {
         type: Number,
         default: 0
-}
+},
     /*
     |--------------------------------------------------------------------------
     | Cart Recovery
