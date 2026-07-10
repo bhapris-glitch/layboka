@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import crypto from "crypto";
 
 const { Schema } = mongoose;
 
@@ -1038,6 +1039,8 @@ conversationSchema.index({
 });
 
 conversationSchema.index({
+    shop: 1,
+    status: 1,
     lastMessageAt: -1
 });
 
@@ -1380,7 +1383,9 @@ conversationSchema.statics.shopStatistics = function (shopId) {
 */
 
 conversationSchema.pre("save", function (next) {
-
+if (!this.conversationId) {
+    this.conversationId = crypto.randomUUID();
+}
     this.totalTokens =
         this.promptTokens +
         this.completionTokens;
