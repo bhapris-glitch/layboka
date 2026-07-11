@@ -1,0 +1,145 @@
+{% comment %}
+==============================================================================
+Layboka AI Shopify Theme App Extension
+File:
+snippets/layboka-loader.liquid
+
+Loads the Layboka widget into the storefront.
+
+Production Ready
+==============================================================================
+{% endcomment %}
+
+{% assign api_base = app.metafields.layboka.api_url | default: "https://api.layboka.com" %}
+{% assign widget_version = app.metafields.layboka.widget_version | default: "1.0.0" %}
+{% assign widget_theme = app.metafields.layboka.theme | default: "light" %}
+{% assign widget_position = app.metafields.layboka.position | default: "bottom-right" %}
+{% assign primary_color = app.metafields.layboka.primary_color | default: "#FF3B2F" %}
+{% assign secondary_color = app.metafields.layboka.secondary_color | default: "#1E3928" %}
+{% assign locale = request.locale.iso_code | default: "en" %}
+
+<div
+    id="layboka-ai-root"
+
+    data-api="{{ api_base }}"
+
+    data-shop="{{ shop.permanent_domain }}"
+
+    data-shop-id="{{ shop.id }}"
+
+    data-currency="{{ cart.currency.iso_code }}"
+
+    data-locale="{{ locale }}"
+
+    data-theme="{{ widget_theme }}"
+
+    data-position="{{ widget_position }}"
+
+    data-primary-color="{{ primary_color }}"
+
+    data-secondary-color="{{ secondary_color }}"
+
+    data-customer-id="{% if customer %}{{ customer.id }}{% endif %}"
+
+    data-customer-email="{% if customer %}{{ customer.email }}{% endif %}"
+
+    data-customer-name="{% if customer %}{{ customer.name | escape }}{% endif %}"
+
+    data-page-type="{{ request.page_type }}"
+
+    data-product-id="{% if product %}{{ product.id }}{% endif %}"
+
+    data-product-handle="{% if product %}{{ product.handle }}{% endif %}"
+
+    data-collection-id="{% if collection %}{{ collection.id }}{% endif %}"
+
+    data-cart-token="{{ cart.token }}"
+
+    data-widget-version="{{ widget_version }}"
+
+    data-app-version="1.0.0"
+
+    hidden>
+</div>
+
+{{ 'chatbot.css' | asset_url | stylesheet_tag }}
+
+{{ 'widget.css' | asset_url | stylesheet_tag }}
+
+<script>
+
+window.LaybokaConfig = {
+
+    apiUrl: "{{ api_base }}",
+
+    shopDomain: "{{ shop.permanent_domain }}",
+
+    shopId: "{{ shop.id }}",
+
+    locale: "{{ locale }}",
+
+    currency: "{{ cart.currency.iso_code }}",
+
+    widgetVersion: "{{ widget_version }}",
+
+    pageType: "{{ request.page_type }}",
+
+    customer: {
+
+        id: "{% if customer %}{{ customer.id }}{% endif %}",
+
+        email: "{% if customer %}{{ customer.email }}{% endif %}",
+
+        name: "{% if customer %}{{ customer.name | escape }}{% endif %}"
+
+    },
+
+    product: {
+
+        id: "{% if product %}{{ product.id }}{% endif %}",
+
+        handle: "{% if product %}{{ product.handle }}{% endif %}"
+
+    },
+
+    collection: {
+
+        id: "{% if collection %}{{ collection.id }}{% endif %}"
+
+    },
+
+    cart: {
+
+        token: "{{ cart.token }}",
+
+        itemCount: {{ cart.item_count }},
+
+        totalPrice: {{ cart.total_price }}
+
+    },
+
+    appearance: {
+
+        theme: "{{ widget_theme }}",
+
+        position: "{{ widget_position }}",
+
+        primaryColor: "{{ primary_color }}",
+
+        secondaryColor: "{{ secondary_color }}"
+
+    }
+
+};
+
+</script>
+
+<script
+    src="{{ 'widget.js' | asset_url }}"
+    defer>
+</script>
+
+<script
+    src="{{ 'chatbot.js' | asset_url }}"
+    defer>
+</script>
