@@ -195,7 +195,7 @@ async function bootstrap(config = {}) {
 
     await loadSession();
 
-    createWidget();
+    
 
     attachEvents();
 
