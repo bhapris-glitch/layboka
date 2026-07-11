@@ -1,0 +1,313 @@
+{% comment %}
+------------------------------------------------------------------------------
+Layboka AI Shopify Theme App Extension
+File:
+apps/shopify/extensions/layboka-chat/blocks/chatbot.liquid
+------------------------------------------------------------------------------
+{% endcomment %}
+
+{%- liquid
+assign api_url = block.settings.api_url
+assign widget_position = block.settings.position
+assign primary_color = block.settings.primary_color
+assign launcher_icon = block.settings.launcher_icon
+assign language = block.settings.language
+assign theme_mode = block.settings.theme_mode
+assign border_radius = block.settings.border_radius
+assign auto_open = block.settings.auto_open
+assign show_branding = block.settings.show_branding
+assign enable_streaming = block.settings.enable_streaming
+assign enable_sound = block.settings.enable_sound
+assign enable_typing = block.settings.enable_typing
+assign welcome_message = block.settings.welcome_message
+assign assistant_name = block.settings.assistant_name
+assign z_index = block.settings.z_index
+-%}
+
+<div
+    id="layboka-ai-root"
+
+    data-api="{{ api_url }}"
+
+    data-shop="{{ shop.permanent_domain }}"
+
+    data-shop-id="{{ shop.id }}"
+
+    data-shop-name="{{ shop.name | escape }}"
+
+    data-currency="{{ cart.currency.iso_code }}"
+
+    data-locale="{{ request.locale.iso_code }}"
+
+    data-customer-id="{% if customer %}{{ customer.id }}{% endif %}"
+
+    data-customer-email="{% if customer %}{{ customer.email }}{% endif %}"
+
+    data-customer-name="{% if customer %}{{ customer.name | escape }}{% endif %}"
+
+    data-page="{{ request.page_type }}"
+
+    data-product-id="{% if product %}{{ product.id }}{% endif %}"
+
+    data-product-title="{% if product %}{{ product.title | escape }}{% endif %}"
+
+    data-collection-id="{% if collection %}{{ collection.id }}{% endif %}"
+
+    data-cart-token="{{ cart.token }}"
+
+    data-cart-count="{{ cart.item_count }}"
+
+    data-position="{{ widget_position }}"
+
+    data-color="{{ primary_color }}"
+
+    data-language="{{ language }}"
+
+    data-theme="{{ theme_mode }}"
+
+    data-radius="{{ border_radius }}"
+
+    data-auto-open="{{ auto_open }}"
+
+    data-branding="{{ show_branding }}"
+
+    data-stream="{{ enable_streaming }}"
+
+    data-sound="{{ enable_sound }}"
+
+    data-typing="{{ enable_typing }}"
+
+    data-assistant="{{ assistant_name | escape }}"
+
+    data-welcome="{{ welcome_message | escape }}"
+
+    data-zindex="{{ z_index }}"
+
+    hidden
+></div>
+
+{{ "chatbot.css" | asset_url | stylesheet_tag }}
+
+{{ "widget.css" | asset_url | stylesheet_tag }}
+
+<script>
+
+window.LAYBOKA_CONFIG = {
+
+    apiUrl: "{{ api_url }}",
+
+    shop: "{{ shop.permanent_domain }}",
+
+    shopId: "{{ shop.id }}",
+
+    shopName: {{ shop.name | json }},
+
+    locale: "{{ request.locale.iso_code }}",
+
+    currency: "{{ cart.currency.iso_code }}",
+
+    customer: {
+
+        id: "{% if customer %}{{ customer.id }}{% endif %}",
+
+        email: "{% if customer %}{{ customer.email }}{% endif %}",
+
+        name: "{% if customer %}{{ customer.name | escape }}{% endif %}"
+
+    },
+
+    page: {
+
+        type: "{{ request.page_type }}",
+
+        url: "{{ request.path }}"
+
+    },
+
+    product: {
+
+        id: "{% if product %}{{ product.id }}{% endif %}",
+
+        title: "{% if product %}{{ product.title | escape }}{% endif %}"
+
+    },
+
+    collection: {
+
+        id: "{% if collection %}{{ collection.id }}{% endif %}"
+
+    },
+
+    cart: {
+
+        token: "{{ cart.token }}",
+
+        itemCount: {{ cart.item_count }},
+
+        total: {{ cart.total_price }}
+
+    },
+
+    widget: {
+
+        position: "{{ widget_position }}",
+
+        primaryColor: "{{ primary_color }}",
+
+        launcherIcon: "{{ launcher_icon }}",
+
+        language: "{{ language }}",
+
+        theme: "{{ theme_mode }}",
+
+        borderRadius: {{ border_radius }},
+
+        autoOpen: {{ auto_open | json }},
+
+        showBranding: {{ show_branding | json }},
+
+        enableStreaming: {{ enable_streaming | json }},
+
+        enableTyping: {{ enable_typing | json }},
+
+        enableSound: {{ enable_sound | json }},
+
+        assistantName: {{ assistant_name | json }},
+
+        welcomeMessage: {{ welcome_message | json }},
+
+        zIndex: {{ z_index }}
+
+    }
+
+};
+
+</script>
+
+<script src="{{ 'widget.js' | asset_url }}" defer></script>
+
+<script src="{{ 'chatbot.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Layboka AI Chatbot",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "api_url",
+      "label": "Layboka API URL",
+      "default": "https://api.layboka.com/api"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Widget Position",
+      "default": "bottom-right",
+      "options": [
+        {
+          "value": "bottom-right",
+          "label": "Bottom Right"
+        },
+        {
+          "value": "bottom-left",
+          "label": "Bottom Left"
+        }
+      ]
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Color",
+      "default": "#FF3B2F"
+    },
+    {
+      "type": "text",
+      "id": "assistant_name",
+      "label": "Assistant Name",
+      "default": "Layboka AI"
+    },
+    {
+      "type": "text",
+      "id": "welcome_message",
+      "label": "Welcome Message",
+      "default": "Hi 👋 How can I help you today?"
+    },
+    {
+      "type": "range",
+      "id": "border_radius",
+      "min": 0,
+      "max": 30,
+      "step": 2,
+      "default": 18,
+      "label": "Border Radius"
+    },
+    {
+      "type": "select",
+      "id": "language",
+      "label": "Language",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Auto" },
+        { "value": "en", "label": "English" },
+        { "value": "hi", "label": "Hindi" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "theme_mode",
+      "label": "Theme",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Auto" },
+        { "value": "light", "label": "Light" },
+        { "value": "dark", "label": "Dark" }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "auto_open",
+      "label": "Open Automatically",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "show_branding",
+      "label": "Show Layboka Branding",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_streaming",
+      "label": "Enable AI Streaming",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_typing",
+      "label": "Typing Indicator",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "enable_sound",
+      "label": "Notification Sound",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "launcher_icon",
+      "label": "Launcher Icon URL"
+    },
+    {
+      "type": "range",
+      "id": "z_index",
+      "label": "Z Index",
+      "min": 1000,
+      "max": 999999,
+      "step": 100,
+      "default": 99999
+    }
+  ]
+}
+{% endschema %}
