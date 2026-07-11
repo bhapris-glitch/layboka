@@ -128,3 +128,427 @@ export async function validateAccessToken(shopId) {
     }
 
 }
+/*
+|--------------------------------------------------------------------------
+| Get Shop Information
+|--------------------------------------------------------------------------
+*/
+
+export async function getShopInformation(session) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query {
+
+            shop {
+
+                id
+                name
+                email
+                myshopifyDomain
+                primaryDomain {
+                    url
+                    host
+                }
+                currencyCode
+                timezoneAbbreviation
+                plan {
+                    displayName
+                    partnerDevelopment
+                }
+            }
+
+        }`
+
+    );
+
+    return response.data.shop;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Products
+|--------------------------------------------------------------------------
+*/
+
+export async function getProducts(
+
+    session,
+
+    first = 50
+
+) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query Products($first:Int!) {
+
+            products(first:$first) {
+
+                nodes {
+
+                    id
+                    title
+                    handle
+                    vendor
+                    productType
+                    status
+
+                    featuredImage{
+                        url
+                    }
+
+                    totalInventory
+
+                    variants(first:20){
+
+                        nodes{
+
+                            id
+                            title
+                            sku
+                            barcode
+                            price
+                            compareAtPrice
+                            inventoryQuantity
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }`,
+
+        {
+
+            variables: {
+
+                first
+
+            }
+
+        }
+
+    );
+
+    return response.data.products.nodes;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Collections
+|--------------------------------------------------------------------------
+*/
+
+export async function getCollections(
+
+    session,
+
+    first = 50
+
+) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query Collections($first:Int!){
+
+            collections(first:$first){
+
+                nodes{
+
+                    id
+                    title
+                    handle
+                    description
+
+                    image{
+
+                        url
+
+                    }
+
+                }
+
+            }
+
+        }`,
+
+        {
+
+            variables: {
+
+                first
+
+            }
+
+        }
+
+    );
+
+    return response.data.collections.nodes;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Customers
+|--------------------------------------------------------------------------
+*/
+
+export async function getCustomers(
+
+    session,
+
+    first = 50
+
+) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query Customers($first:Int!){
+
+            customers(first:$first){
+
+                nodes{
+
+                    id
+
+                    firstName
+
+                    lastName
+
+                    email
+
+                    phone
+
+                    numberOfOrders
+
+                    amountSpent{
+
+                        amount
+
+                        currencyCode
+
+                    }
+
+                }
+
+            }
+
+        }`,
+
+        {
+
+            variables: {
+
+                first
+
+            }
+
+        }
+
+    );
+
+    return response.data.customers.nodes;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Orders
+|--------------------------------------------------------------------------
+*/
+
+export async function getOrders(
+
+    session,
+
+    first = 50
+
+) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query Orders($first:Int!){
+
+            orders(first:$first){
+
+                nodes{
+
+                    id
+
+                    name
+
+                    displayFinancialStatus
+
+                    displayFulfillmentStatus
+
+                    createdAt
+
+                    totalPriceSet{
+
+                        shopMoney{
+
+                            amount
+
+                            currencyCode
+
+                        }
+
+                    }
+
+                    customer{
+
+                        id
+
+                        firstName
+
+                        lastName
+
+                    }
+
+                }
+
+            }
+
+        }`,
+
+        {
+
+            variables: {
+
+                first
+
+            }
+
+        }
+
+    );
+
+    return response.data.orders.nodes;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Inventory
+|--------------------------------------------------------------------------
+*/
+
+export async function getInventory(
+
+    session,
+
+    first = 100
+
+) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query Inventory($first:Int!){
+
+            inventoryItems(first:$first){
+
+                nodes{
+
+                    id
+
+                    sku
+
+                    tracked
+
+                }
+
+            }
+
+        }`,
+
+        {
+
+            variables: {
+
+                first
+
+            }
+
+        }
+
+    );
+
+    return response.data.inventoryItems.nodes;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Locations
+|--------------------------------------------------------------------------
+*/
+
+export async function getLocations(session) {
+
+    const client = getAdminClient(session);
+
+    const response = await client.request(
+
+        `#graphql
+        query{
+
+            locations(first:50){
+
+                nodes{
+
+                    id
+
+                    name
+
+                    isActive
+
+                    fulfillsOnlineOrders
+
+                    address{
+
+                        city
+
+                        province
+
+                        country
+
+                        zip
+
+                    }
+
+                }
+
+            }
+
+        }`
+
+    );
+
+    return response.data.locations.nodes;
+
+}
