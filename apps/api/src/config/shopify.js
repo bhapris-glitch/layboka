@@ -6,6 +6,14 @@ const requiredEnv = [
   "SHOPIFY_APP_URL",
   "SHOPIFY_SCOPES"
 ];
+export const SHOPIFY_WEBHOOKS = [
+  "APP_UNINSTALLED",
+  "ORDERS_CREATE",
+  "ORDERS_UPDATED",
+  "CUSTOMERS_DATA_REQUEST",
+  "CUSTOMERS_REDACT",
+  "SHOP_REDACT"
+];
 
 for (const key of requiredEnv) {
   if (!process.env[key]) {
