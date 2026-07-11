@@ -592,3 +592,569 @@ export async function getProductStatistics(shop) {
     };
 
 }
+/*
+|--------------------------------------------------------------------------
+| Sync Shopify Products
+|--------------------------------------------------------------------------
+*/
+
+export async function syncShopifyProducts(
+
+    shop,
+
+    shopifyProducts = []
+
+) {
+
+    const results = {
+
+        created: 0,
+
+        updated: 0,
+
+        failed: 0
+
+    };
+
+    for (const item of shopifyProducts) {
+
+        try {
+
+            const existing = await Product.findOne({
+
+                shop,
+
+                shopifyProductId: String(item.id)
+
+            });
+
+            const data = {
+
+                shop,
+
+                shopifyProductId: String(item.id),
+
+                title: item.title,
+
+                description: item.body_html || "",
+
+                handle: item.handle,
+
+                vendor: item.vendor || "",
+
+                productType: item.product_type || "",
+
+                status: item.status || "active",
+
+                tags: item.tags
+                    ? item.tags.split(",").map(tag => tag.trim())
+                    : [],
+
+                featuredImage:
+                    item.image?.src || "",
+
+                images:
+                    item.images?.map(img => img.src) || [],
+
+                price: Number(
+
+                    item.variants?.[0]?.price || 0
+
+                ),
+
+                compareAtPrice: Number(
+
+                    item.variants?.[0]?.compare_at_price || 0
+
+                ),
+
+                inventoryQuantity: Number(
+
+                    item.variants?.[0]?.inventory_quantity || 0
+
+                )
+
+            };
+
+            if (existing) {
+
+                await Product.updateOne(
+
+                    { _id: existing._id },
+
+                    data
+
+                );
+
+                results.updated++;
+
+            } else {
+
+                await Product.create(data);
+
+                results.created++;
+
+            }
+
+        } catch {
+
+            results.failed++;
+
+        }
+
+    }
+
+    return results;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Import Products
+|--------------------------------------------------------------------------
+*/
+
+export async function bulkImportProducts(
+
+    products = []
+
+) {
+
+    if (!products.length) {
+
+        return [];
+
+    }
+
+    return Product.insertMany(
+
+        products,
+
+        {
+
+            ordered: false
+
+        }
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Bulk Update Products
+|--------------------------------------------------------------------------
+*/
+
+export async function bulkUpdateProducts(
+
+    updates = []
+
+) {
+
+    if (!updates.length) {
+
+        return {
+
+            modifiedCount: 0
+
+        };
+
+    }
+
+    const operations = updates.map(item => ({
+
+        updateOne: {
+
+            filter: {
+
+                _id: item._id
+
+            },
+
+            update: {
+
+                $set: item.data
+
+            }
+
+        }
+
+    }));
+
+    return Product.bulkWrite(
+
+        operations
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Product Cache
+|--------------------------------------------------------------------------
+*/
+
+const productCache = new Map();
+
+export function cacheProduct(
+
+    product
+
+) {
+
+    if (!product) {
+
+        return;
+
+    }
+
+    productCache.set(
+
+        String(product._id),
+
+        {
+
+            data: product,
+
+            cachedAt: Date.now()
+
+        }
+
+    );
+
+}
+
+export function getCachedProduct(
+
+    productId
+
+) {
+
+    const cached = productCache.get(
+
+        String(productId)
+
+    );
+
+    if (!cached) {
+
+        return null;
+
+    }
+
+    return cached.data;
+
+}
+
+export function clearProductCache() {
+
+    productCache.clear();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Search Optimization
+|--------------------------------------------------------------------------
+*/
+
+export function normalizeSearchQuery(
+
+    query = ""
+
+) {
+
+    return query
+
+        .toLowerCase()
+
+        .trim()
+
+        .replace(/\s+/g, " ");
+
+}
+
+export function buildSearchRegex(
+
+    keyword = ""
+
+) {
+
+    return new RegExp(
+
+        normalizeSearchQuery(keyword),
+
+        "i"
+
+    );
+
+}
+
+export function scoreProductMatch(
+
+    product,
+
+    keyword
+
+) {
+
+    let score = 0;
+
+    const search = normalizeSearchQuery(keyword);
+
+    if (
+
+        product.title?.toLowerCase().includes(search)
+
+    ) {
+
+        score += 50;
+
+    }
+
+    if (
+
+        product.vendor?.toLowerCase().includes(search)
+
+    ) {
+
+        score += 20;
+
+    }
+
+    if (
+
+        product.productType?.toLowerCase().includes(search)
+
+    ) {
+
+        score += 15;
+
+    }
+
+    if (
+
+        product.tags?.some(tag =>
+
+            tag.toLowerCase().includes(search)
+
+        )
+
+    ) {
+
+        score += 15;
+
+    }
+
+    return score;
+
+                }
+/*
+|--------------------------------------------------------------------------
+| Product Analytics
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductAnalytics(shop) {
+
+    const [
+        totalProducts,
+        activeProducts,
+        featuredProducts,
+        outOfStockProducts,
+        totalInventory,
+        totalValue,
+        averagePrice,
+        topSellingProducts,
+        recentlyAddedProducts
+    ] = await Promise.all([
+
+        Product.countDocuments({
+            shop,
+            deleted: false
+        }),
+
+        Product.countDocuments({
+            shop,
+            status: "active",
+            deleted: false
+        }),
+
+        Product.countDocuments({
+            shop,
+            featured: true,
+            status: "active",
+            deleted: false
+        }),
+
+        Product.countDocuments({
+            shop,
+            status: "active",
+            deleted: false,
+            inventoryQuantity: { $lte: 0 }
+        }),
+
+        Product.aggregate([
+            {
+                $match: {
+                    shop,
+                    deleted: false
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    totalInventory: {
+                        $sum: "$inventoryQuantity"
+                    }
+                }
+            }
+        ]),
+
+        Product.aggregate([
+            {
+                $match: {
+                    shop,
+                    deleted: false
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    inventoryValue: {
+                        $sum: {
+                            $multiply: [
+                                "$price",
+                                "$inventoryQuantity"
+                            ]
+                        }
+                    }
+                }
+            }
+        ]),
+
+        Product.aggregate([
+            {
+                $match: {
+                    shop,
+                    status: "active",
+                    deleted: false
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    averagePrice: {
+                        $avg: "$price"
+                    }
+                }
+            }
+        ]),
+
+        Product.find({
+            shop,
+            status: "active",
+            deleted: false
+        })
+        .sort({
+            totalSales: -1
+        })
+        .limit(10)
+        .lean(),
+
+        Product.find({
+            shop,
+            deleted: false
+        })
+        .sort({
+            createdAt: -1
+        })
+        .limit(10)
+        .lean()
+
+    ]);
+
+    return {
+
+        totalProducts,
+
+        activeProducts,
+
+        featuredProducts,
+
+        outOfStockProducts,
+
+        totalInventory:
+            totalInventory[0]?.totalInventory || 0,
+
+        inventoryValue:
+            totalValue[0]?.inventoryValue || 0,
+
+        averagePrice:
+            averagePrice[0]?.averagePrice || 0,
+
+        topSellingProducts,
+
+        recentlyAddedProducts
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Product Service
+|--------------------------------------------------------------------------
+*/
+
+export const ProductService = {
+
+    createProduct,
+
+    updateProduct,
+
+    deleteProduct,
+
+    getProductById,
+
+    getProductByShopifyId,
+
+    searchProducts,
+
+    getProductsByCategory,
+
+    getProductsByVendor,
+
+    getProductsByPrice,
+
+    getInStockProducts,
+
+    getFeaturedProducts,
+
+    getActiveProducts,
+
+    getProductStatistics,
+
+    syncShopifyProducts,
+
+    bulkImportProducts,
+
+    bulkUpdateProducts,
+
+    rebuildProductCache,
+
+    optimizeProductSearch,
+
+    getProductAnalytics
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Default Export
+|--------------------------------------------------------------------------
+*/
+
+export default ProductService;
