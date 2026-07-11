@@ -753,3 +753,224 @@ export async function handleSubscriptionCancelled(
     await subscription.save();
 
 }
+/*
+|--------------------------------------------------------------------------
+| Cancel Subscription
+|--------------------------------------------------------------------------
+*/
+
+export async function cancelSubscription(
+
+    subscriptionId,
+
+    cancelAtPeriodEnd = true
+
+) {
+
+    try {
+
+        return await stripe.subscriptions.update(
+
+            subscriptionId,
+
+            {
+
+                cancel_at_period_end:
+
+                    cancelAtPeriodEnd
+
+            }
+
+        );
+
+    } catch (error) {
+
+        throw new Error(
+
+            `Stripe Cancel Subscription Failed: ${error.message}`
+
+        );
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resume Subscription
+|--------------------------------------------------------------------------
+*/
+
+export async function resumeSubscription(
+
+    subscriptionId
+
+) {
+
+    try {
+
+        return await stripe.subscriptions.update(
+
+            subscriptionId,
+
+            {
+
+                cancel_at_period_end: false
+
+            }
+
+        );
+
+    } catch (error) {
+
+        throw new Error(
+
+            `Stripe Resume Subscription Failed: ${error.message}`
+
+        );
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Create Billing Portal Session
+|--------------------------------------------------------------------------
+*/
+
+export async function createBillingPortal(
+
+    customerId,
+
+    returnUrl
+
+) {
+
+    try {
+
+        return await stripe.billingPortal.sessions.create({
+
+            customer: customerId,
+
+            return_url: returnUrl
+
+        });
+
+    } catch (error) {
+
+        throw new Error(
+
+            `Stripe Billing Portal Failed: ${error.message}`
+
+        );
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Refund Payment
+|--------------------------------------------------------------------------
+*/
+
+export async function refundPayment(
+
+    paymentIntentId,
+
+    amount = null
+
+) {
+
+    try {
+
+        const payload = {
+
+            payment_intent: paymentIntentId
+
+        };
+
+        if (amount) {
+
+            payload.amount = amount;
+
+        }
+
+        return await stripe.refunds.create(payload);
+
+    } catch (error) {
+
+        throw new Error(
+
+            `Stripe Refund Failed: ${error.message}`
+
+        );
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Invoice
+|--------------------------------------------------------------------------
+*/
+
+export async function getInvoice(
+
+    invoiceId
+
+) {
+
+    return stripe.invoices.retrieve(
+
+        invoiceId
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Stripe Service
+|--------------------------------------------------------------------------
+*/
+
+export const StripeService = {
+
+    createCustomer,
+
+    getCustomer,
+
+    createCheckoutSession,
+
+    createSubscription,
+
+    getSubscription,
+
+    updateSubscription,
+
+    cancelSubscription,
+
+    resumeSubscription,
+
+    createBillingPortal,
+
+    refundPayment,
+
+    createWebhookEvent,
+
+    createPaymentIntent,
+
+    getInvoice
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Export
+|--------------------------------------------------------------------------
+*/
+
+export default StripeService;
