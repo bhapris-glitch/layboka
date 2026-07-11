@@ -1172,3 +1172,685 @@ export async function trackAIConversion(
     await analytics.save();
 
 }
+/*
+|--------------------------------------------------------------------------
+| Customer Webhook Handler
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerWebhook(
+
+    shop,
+
+    topic,
+
+    payload
+
+) {
+
+    switch (topic) {
+
+        case "customers/create":
+
+            return handleCustomerCreate(
+
+                shop,
+
+                payload
+
+            );
+
+        case "customers/update":
+
+            return handleCustomerUpdate(
+
+                shop,
+
+                payload
+
+            );
+
+        case "customers/delete":
+
+            return handleCustomerDelete(
+
+                shop,
+
+                payload
+
+            );
+
+        default:
+
+            return null;
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Customer Create
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerCreate(
+
+    shop,
+
+    payload
+
+) {
+
+    const visitor = await Visitor.findOne({
+
+        shop: shop._id,
+
+        email: payload.email
+
+    });
+
+    if (visitor) {
+
+        visitor.customerId = String(payload.id);
+
+        visitor.firstName = payload.first_name || "";
+
+        visitor.lastName = payload.last_name || "";
+
+        visitor.acceptsMarketing =
+
+            payload.accepts_marketing || false;
+
+        visitor.ordersCount =
+
+            payload.orders_count || 0;
+
+        visitor.totalSpent =
+
+            Number(payload.total_spent || 0);
+
+        await visitor.save();
+    }
+
+    return {
+
+        success: true,
+
+        action: "customer_created"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Customer Update
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerUpdate(
+
+    shop,
+
+    payload
+
+) {
+
+    const visitor = await Visitor.findOne({
+
+        shop: shop._id,
+
+        customerId: String(payload.id)
+
+    });
+
+    if (!visitor) {
+
+        return {
+
+            success: false,
+
+            message: "Visitor not found."
+
+        };
+
+    }
+
+    visitor.email = payload.email || visitor.email;
+
+    visitor.firstName = payload.first_name || "";
+
+    visitor.lastName = payload.last_name || "";
+
+    visitor.ordersCount = payload.orders_count || 0;
+
+    visitor.totalSpent = Number(
+
+        payload.total_spent || 0
+
+    );
+
+    visitor.acceptsMarketing =
+
+        payload.accepts_marketing || false;
+
+    await visitor.save();
+
+    return {
+
+        success: true,
+
+        action: "customer_updated"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Customer Delete
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerDelete(
+
+    shop,
+
+    payload
+
+) {
+
+    await Visitor.updateOne(
+
+        {
+
+            shop: shop._id,
+
+            customerId: String(payload.id)
+
+        },
+
+        {
+
+            deleted: true,
+
+            deletedAt: new Date()
+
+        }
+
+    );
+
+    return {
+
+        success: true,
+
+        action: "customer_deleted"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| App Uninstalled
+|--------------------------------------------------------------------------
+*/
+
+export async function handleAppUninstalled(
+
+    shop
+
+) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Disable Shop
+    |--------------------------------------------------------------------------
+    */
+
+    shop.installed = false;
+
+    shop.status = "uninstalled";
+
+    shop.uninstalledAt = new Date();
+
+    await shop.save();
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel Subscription
+    |--------------------------------------------------------------------------
+    */
+
+    await Subscription.updateMany(
+
+        {
+
+            shop: shop._id,
+
+            status: "active"
+
+        },
+
+        {
+
+            status: "cancelled",
+
+            cancelledAt: new Date()
+
+        }
+
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cleanup Conversations
+    |--------------------------------------------------------------------------
+    */
+
+    await Conversation.updateMany(
+
+        {
+
+            shop: shop._id
+
+        },
+
+        {
+
+            archived: true
+
+        }
+
+    );
+
+    return {
+
+        success: true,
+
+        action: "app_uninstalled"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| GDPR Customer Redact
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerRedact(
+
+    payload
+
+) {
+
+    await Visitor.updateMany(
+
+        {
+
+            customerId: String(payload.customer.id)
+
+        },
+
+        {
+
+            email: "",
+
+            firstName: "",
+
+            lastName: "",
+
+            phone: "",
+
+            customerNotes: "",
+
+            deleted: true
+
+        }
+
+    );
+
+    return {
+
+        success: true
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| GDPR Shop Redact
+|--------------------------------------------------------------------------
+*/
+
+export async function handleShopRedact(
+
+    shop
+
+) {
+
+    await Conversation.deleteMany({
+
+        shop: shop._id
+
+    });
+
+    await Message.deleteMany({
+
+        shop: shop._id
+
+    });
+
+    await Visitor.deleteMany({
+
+        shop: shop._id
+
+    });
+
+    return {
+
+        success: true
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| GDPR Customers Data Request
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomersDataRequest(
+
+    payload
+
+) {
+
+    const visitor = await Visitor.findOne({
+
+        customerId: String(
+
+            payload.customer.id
+
+        )
+
+    });
+
+    return {
+
+        success: true,
+
+        customer: visitor
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Shop Cleanup
+|--------------------------------------------------------------------------
+*/
+
+export async function cleanupShopData(
+
+    shopId
+
+) {
+
+    await Conversation.deleteMany({
+
+        shop: shopId
+
+    });
+
+    await Message.deleteMany({
+
+        shop: shopId
+
+    });
+
+    await Visitor.deleteMany({
+
+        shop: shopId
+
+    });
+
+    await Analytics.deleteMany({
+
+        shop: shopId
+
+    });
+
+    return true;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Conversation Cleanup
+|--------------------------------------------------------------------------
+*/
+
+export async function cleanupConversation(
+
+    conversationId
+
+) {
+
+    await Message.deleteMany({
+
+        conversation: conversationId
+
+    });
+
+    await Conversation.deleteOne({
+
+        _id: conversationId
+
+    });
+
+    return true;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Subscription Updates
+|--------------------------------------------------------------------------
+*/
+
+export async function updateSubscriptionStatus(
+
+    shop,
+
+    status
+
+) {
+
+    const subscription =
+
+        await Subscription.findOne({
+
+            shop: shop._id
+
+        });
+
+    if (!subscription) {
+
+        return null;
+
+    }
+
+    subscription.status = status;
+
+    subscription.updatedAt = new Date();
+
+    await subscription.save();
+
+    return subscription;
+
+            }
+/*
+|--------------------------------------------------------------------------
+| Webhook Service
+|--------------------------------------------------------------------------
+|
+| Central service object exposing all webhook handlers and helpers.
+|--------------------------------------------------------------------------
+*/
+
+export const WebhookService = {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Verification
+    |--------------------------------------------------------------------------
+    */
+
+    verifyWebhook,
+
+    processWebhook,
+
+    parseWebhookPayload,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product Webhooks
+    |--------------------------------------------------------------------------
+    */
+
+    handleProductWebhook,
+
+    handleProductCreate,
+
+    handleProductUpdate,
+
+    handleProductDelete,
+
+    syncProduct,
+
+    updateInventory,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Order Webhooks
+    |--------------------------------------------------------------------------
+    */
+
+    handleOrderWebhook,
+
+    handleOrderCreate,
+
+    handleOrderUpdate,
+
+    handleOrderCancel,
+
+    handleOrderFulfilled,
+
+    syncOrder,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customer Webhooks
+    |--------------------------------------------------------------------------
+    */
+
+    handleCustomerWebhook,
+
+    handleCustomerCreate,
+
+    handleCustomerUpdate,
+
+    handleCustomerDelete,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shop Webhooks
+    |--------------------------------------------------------------------------
+    */
+
+    handleAppUninstalled,
+
+    handleShopUpdate,
+
+    /*
+    |--------------------------------------------------------------------------
+    | Utilities
+    |--------------------------------------------------------------------------
+    */
+
+    logWebhook,
+
+    updateWebhookStatus
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Helper Exports
+|--------------------------------------------------------------------------
+*/
+
+export {
+
+    verifyWebhook,
+
+    processWebhook,
+
+    parseWebhookPayload,
+
+    handleProductWebhook,
+
+    handleProductCreate,
+
+    handleProductUpdate,
+
+    handleProductDelete,
+
+    syncProduct,
+
+    updateInventory,
+
+    handleOrderWebhook,
+
+    handleOrderCreate,
+
+    handleOrderUpdate,
+
+    handleOrderCancel,
+
+    handleOrderFulfilled,
+
+    syncOrder,
+
+    handleCustomerWebhook,
+
+    handleCustomerCreate,
+
+    handleCustomerUpdate,
+
+    handleCustomerDelete,
+
+    handleAppUninstalled,
+
+    handleShopUpdate,
+
+    logWebhook,
+
+    updateWebhookStatus
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Default Export
+|--------------------------------------------------------------------------
+*/
+
+export default WebhookService;
