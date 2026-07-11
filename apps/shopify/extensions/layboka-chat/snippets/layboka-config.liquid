@@ -1,0 +1,279 @@
+{%- liquid
+  assign api_url = app.metafields.layboka.api_url
+  assign widget_key = app.metafields.layboka.widget_key
+  assign shop_id = app.metafields.layboka.shop_id
+  assign plan = app.metafields.layboka.plan
+  assign locale = request.locale.iso_code
+-%}
+
+<script>
+
+window.LAYBOKA_CONFIG = {
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Configuration
+    |--------------------------------------------------------------------------
+    */
+
+    apiBaseUrl:
+        "{{ api_url | default: 'https://api.layboka.com/api/v1' }}",
+
+    websocketUrl:
+        "{{ api_url | default: 'https://api.layboka.com' }}/socket",
+
+    cdnUrl:
+        "https://cdn.layboka.com",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify
+    |--------------------------------------------------------------------------
+    */
+
+    shop: {
+
+        id: "{{ shop.id }}",
+
+        name: {{ shop.name | json }},
+
+        domain: "{{ shop.permanent_domain }}",
+
+        url: "{{ shop.url }}",
+
+        currency: "{{ shop.currency }}",
+
+        moneyFormat: {{ shop.money_format | json }},
+
+        locale: "{{ locale }}"
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Merchant
+    |--------------------------------------------------------------------------
+    */
+
+    merchant: {
+
+        shopId: "{{ shop_id }}",
+
+        widgetKey: "{{ widget_key }}",
+
+        plan: "{{ plan | default: 'Starter' }}"
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customer
+    |--------------------------------------------------------------------------
+    */
+
+    customer: {
+
+        id:
+            {% if customer %}
+                "{{ customer.id }}"
+            {% else %}
+                null
+            {% endif %},
+
+        firstName:
+            {% if customer %}
+                {{ customer.first_name | json }}
+            {% else %}
+                null
+            {% endif %},
+
+        lastName:
+            {% if customer %}
+                {{ customer.last_name | json }}
+            {% else %}
+                null
+            {% endif %},
+
+        email:
+            {% if customer %}
+                {{ customer.email | json }}
+            {% else %}
+                null
+            {% endif %},
+
+        phone:
+            {% if customer %}
+                {{ customer.phone | json }}
+            {% else %}
+                null
+            {% endif %},
+
+        tags:
+            {% if customer %}
+                {{ customer.tags | json }}
+            {% else %}
+                []
+            {% endif %}
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Theme
+    |--------------------------------------------------------------------------
+    */
+
+    theme: {
+
+        id: "{{ theme.id }}",
+
+        name: {{ theme.name | json }}
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Current Page
+    |--------------------------------------------------------------------------
+    */
+
+    page: {
+
+        type: "{{ request.page_type }}",
+
+        title: {{ page_title | json }},
+
+        url: "{{ request.path }}"
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product
+    |--------------------------------------------------------------------------
+    */
+
+    product:
+
+        {% if product %}
+
+        {
+
+            id: "{{ product.id }}",
+
+            title: {{ product.title | json }},
+
+            handle: "{{ product.handle }}",
+
+            vendor: {{ product.vendor | json }},
+
+            type: {{ product.type | json }},
+
+            available: {{ product.available | json }},
+
+            price: "{{ product.price }}",
+
+            compareAtPrice: "{{ product.compare_at_price }}",
+
+            currency: "{{ shop.currency }}",
+
+            featuredImage:
+                "{{ product.featured_image | image_url: width: 1000 }}"
+
+        }
+
+        {% else %}
+
+        null
+
+        {% endif %},
+
+    /*
+    |--------------------------------------------------------------------------
+    | Collection
+    |--------------------------------------------------------------------------
+    */
+
+    collection:
+
+        {% if collection %}
+
+        {
+
+            id: "{{ collection.id }}",
+
+            title: {{ collection.title | json }},
+
+            handle: "{{ collection.handle }}"
+
+        }
+
+        {% else %}
+
+        null
+
+        {% endif %},
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cart
+    |--------------------------------------------------------------------------
+    */
+
+    cart: {
+
+        token: "{{ cart.token }}",
+
+        itemCount: {{ cart.item_count }},
+
+        totalPrice: {{ cart.total_price }},
+
+        currency: "{{ cart.currency.iso_code }}"
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Feature Flags
+    |--------------------------------------------------------------------------
+    */
+
+    features: {
+
+        streaming: true,
+
+        recommendations: true,
+
+        cartRecovery: true,
+
+        orderTracking: true,
+
+        quickReplies: true,
+
+        markdown: true,
+
+        typingIndicator: true,
+
+        voice: false,
+
+        analytics: true
+
+    },
+
+    /*
+    |--------------------------------------------------------------------------
+    | Widget
+    |--------------------------------------------------------------------------
+    */
+
+    widget: {
+
+        version: "1.0.0",
+
+        environment: "production"
+
+    }
+
+};
+
+</script>
