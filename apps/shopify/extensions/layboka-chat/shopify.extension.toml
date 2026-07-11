@@ -1,0 +1,214 @@
+name = "Layboka AI Chat"
+
+type = "theme"
+
+handle = "layboka-chat"
+
+description = "Layboka AI Sales Executive for Shopify Stores"
+
+api_version = "2025-04"
+
+[[extensions]]
+type = "theme_app_extension"
+
+name = "Layboka AI"
+
+handle = "layboka-ai"
+
+[[extensions.blocks]]
+type = "app"
+
+name = "Layboka AI Chat"
+
+target = "body"
+
+entry = "blocks/chatbot.liquid"
+
+description = "AI Sales Executive Chat Widget"
+
+[capabilities]
+
+network_access = true
+
+block_progress = false
+
+api_access = true
+
+[settings]
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_chat"
+label = "Enable Layboka AI"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_streaming"
+label = "Enable Streaming Response"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "show_launcher"
+label = "Show Floating Launcher"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "allow_drag"
+label = "Allow Widget Dragging"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "show_typing_indicator"
+label = "Show Typing Indicator"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "show_product_cards"
+label = "Enable Product Cards"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_cart_recovery"
+label = "Enable Cart Recovery"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_order_tracking"
+label = "Enable Order Tracking"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_handoff"
+label = "Enable Human Handoff"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "enable_sound"
+label = "Notification Sound"
+default = false
+
+[[settings.fields]]
+type = "checkbox"
+id = "remember_customer"
+label = "Remember Customer"
+default = true
+
+[[settings.fields]]
+type = "checkbox"
+id = "dark_mode"
+label = "Use Dark Theme"
+default = false
+
+[[settings.fields]]
+type = "text"
+id = "assistant_name"
+label = "Assistant Name"
+default = "Layboka AI"
+
+[[settings.fields]]
+type = "text"
+id = "welcome_message"
+label = "Welcome Message"
+default = "Hi 👋 I'm Layboka AI. How can I help you today?"
+
+[[settings.fields]]
+type = "text"
+id = "placeholder"
+label = "Input Placeholder"
+default = "Ask anything..."
+
+[[settings.fields]]
+type = "url"
+id = "api_url"
+label = "Layboka API URL"
+default = "https://api.layboka.com"
+
+[[settings.fields]]
+type = "color"
+id = "primary_color"
+label = "Primary Color"
+default = "#FF3B2F"
+
+[[settings.fields]]
+type = "color"
+id = "secondary_color"
+label = "Secondary Color"
+default = "#1E3928"
+
+[[settings.fields]]
+type = "range"
+id = "widget_width"
+label = "Widget Width"
+min = 320
+max = 500
+step = 10
+default = 380
+unit = "px"
+
+[[settings.fields]]
+type = "range"
+id = "widget_height"
+label = "Widget Height"
+min = 500
+max = 900
+step = 10
+default = 700
+unit = "px"
+
+[[settings.fields]]
+type = "select"
+id = "widget_position"
+label = "Widget Position"
+
+[[settings.fields.options]]
+value = "bottom-right"
+label = "Bottom Right"
+
+[[settings.fields.options]]
+value = "bottom-left"
+label = "Bottom Left"
+
+default = "bottom-right"
+
+[[settings.fields]]
+type = "select"
+id = "launcher_style"
+label = "Launcher Style"
+
+[[settings.fields.options]]
+value = "circle"
+label = "Circle"
+
+[[settings.fields.options]]
+value = "rounded"
+label = "Rounded Square"
+
+default = "circle"
+
+[[settings.fields]]
+type = "select"
+id = "language"
+label = "Default Language"
+
+[[settings.fields.options]]
+value = "auto"
+label = "Auto Detect"
+
+[[settings.fields.options]]
+value = "en"
+label = "English"
+
+[[settings.fields.options]]
+value = "hi"
+label = "Hindi"
+
+default = "auto"
