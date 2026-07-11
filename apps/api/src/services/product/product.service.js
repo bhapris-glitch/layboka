@@ -201,3 +201,394 @@ export async function getShopProducts(
     .limit(limit);
 
 }
+/*
+|--------------------------------------------------------------------------
+| Search Products
+|--------------------------------------------------------------------------
+*/
+
+export async function searchProducts({
+
+    shop,
+
+    keyword = "",
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+}) {
+
+    const query = {
+
+        shop,
+
+        status: "active",
+
+        deleted: false
+
+    };
+
+    if (keyword.trim()) {
+
+        query.$or = [
+
+            {
+                title: {
+                    $regex: keyword,
+                    $options: "i"
+                }
+            },
+
+            {
+                description: {
+                    $regex: keyword,
+                    $options: "i"
+                }
+            },
+
+            {
+                vendor: {
+                    $regex: keyword,
+                    $options: "i"
+                }
+            },
+
+            {
+                productType: {
+                    $regex: keyword,
+                    $options: "i"
+                }
+            },
+
+            {
+                tags: {
+                    $elemMatch: {
+                        $regex: keyword,
+                        $options: "i"
+                    }
+                }
+            }
+
+        ];
+
+    }
+
+    return Product.find(query)
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filter By Category
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductsByCategory(
+
+    shop,
+
+    category,
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        productType: category,
+
+        status: "active",
+
+        deleted: false
+
+    })
+
+    .sort({ title: 1 })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filter By Vendor
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductsByVendor(
+
+    shop,
+
+    vendor,
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        vendor,
+
+        status: "active",
+
+        deleted: false
+
+    })
+
+    .sort({ title: 1 })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Filter By Price
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductsByPrice(
+
+    shop,
+
+    minPrice = 0,
+
+    maxPrice = Number.MAX_SAFE_INTEGER,
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        status: "active",
+
+        deleted: false,
+
+        price: {
+
+            $gte: minPrice,
+
+            $lte: maxPrice
+
+        }
+
+    })
+
+    .sort({ price: 1 })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Inventory Filter
+|--------------------------------------------------------------------------
+*/
+
+export async function getInStockProducts(
+
+    shop,
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        status: "active",
+
+        deleted: false,
+
+        inventoryQuantity: {
+
+            $gt: 0
+
+        }
+
+    })
+
+    .sort({
+
+        inventoryQuantity: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Featured Products
+|--------------------------------------------------------------------------
+*/
+
+export async function getFeaturedProducts(
+
+    shop,
+
+    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        featured: true,
+
+        status: "active",
+
+        deleted: false
+
+    })
+
+    .sort({
+
+        totalSales: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Active Products
+|--------------------------------------------------------------------------
+*/
+
+export async function getActiveProducts(
+
+    shop,
+
+    limit = PRODUCT_LIMITS.MAX_LIMIT
+
+) {
+
+    return Product.find({
+
+        shop,
+
+        status: "active",
+
+        deleted: false
+
+    })
+
+    .sort({
+
+        updatedAt: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Product Statistics
+|--------------------------------------------------------------------------
+*/
+
+export async function getProductStatistics(shop) {
+
+    const [
+
+        total,
+
+        active,
+
+        featured,
+
+        outOfStock
+
+    ] = await Promise.all([
+
+        Product.countDocuments({
+
+            shop,
+
+            deleted: false
+
+        }),
+
+        Product.countDocuments({
+
+            shop,
+
+            status: "active",
+
+            deleted: false
+
+        }),
+
+        Product.countDocuments({
+
+            shop,
+
+            featured: true,
+
+            status: "active",
+
+            deleted: false
+
+        }),
+
+        Product.countDocuments({
+
+            shop,
+
+            status: "active",
+
+            deleted: false,
+
+            inventoryQuantity: {
+
+                $lte: 0
+
+            }
+
+        })
+
+    ]);
+
+    return {
+
+        total,
+
+        active,
+
+        featured,
+
+        outOfStock
+
+    };
+
+}
