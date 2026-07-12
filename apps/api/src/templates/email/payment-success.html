@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Payment Successful - Layboka</title>
+<style>
+body{
+    margin:0;
+    padding:0;
+    background:#071F14;
+    font-family:Arial,Helvetica,sans-serif;
+    color:#ffffff;
+}
+.container{
+    max-width:600px;
+    margin:40px auto;
+    background:#0D2B1F;
+    border-radius:16px;
+    overflow:hidden;
+}
+.header{
+    padding:30px;
+    text-align:center;
+    border-bottom:1px solid rgba(255,255,255,.08);
+}
+.logo{
+    font-size:34px;
+    font-weight:700;
+    color:#FF4B2B;
+}
+.tagline{
+    color:#FF7A1A;
+    font-size:14px;
+    margin-top:4px;
+}
+.content{
+    padding:40px 35px;
+}
+h1{
+    margin-top:0;
+    font-size:30px;
+}
+.success{
+    color:#39d98a;
+    font-size:18px;
+    font-weight:bold;
+}
+.card{
+    margin:30px 0;
+    padding:20px;
+    background:#123526;
+    border-radius:12px;
+}
+.row{
+    display:flex;
+    justify-content:space-between;
+    padding:8px 0;
+}
+.button{
+    display:inline-block;
+    background:#FF4B2B;
+    color:#ffffff;
+    text-decoration:none;
+    padding:15px 32px;
+    border-radius:10px;
+    font-weight:bold;
+}
+.footer{
+    padding:30px;
+    text-align:center;
+    color:#b7c7bf;
+    font-size:13px;
+}
+a{
+    color:#FF7A1A;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<div class="logo">Layboka</div>
+<div class="tagline">AI Sales Executive</div>
+</div>
+
+<div class="content">
+
+<p>Hello {{merchantName}},</p>
+
+<h1>Payment Successful 🎉</h1>
+
+<p class="success">
+Your subscription has been activated successfully.
+</p>
+
+<p>
+Thank you for choosing Layboka. Your AI Sales Executive is now ready to help grow your Shopify store 24/7.
+</p>
+
+<div class="card">
+
+<div class="row">
+<span>Plan</span>
+<strong>{{planName}}</strong>
+</div>
+
+<div class="row">
+<span>Amount Paid</span>
+<strong>{{currency}} {{amount}}</strong>
+</div>
+
+<div class="row">
+<span>Billing</span>
+<strong>{{billingCycle}}</strong>
+</div>
+
+<div class="row">
+<span>Invoice</span>
+<strong>{{invoiceNumber}}</strong>
+</div>
+
+<div class="row">
+<span>Payment Date</span>
+<strong>{{paymentDate}}</strong>
+</div>
+
+</div>
+
+<div style="text-align:center;margin:40px 0;">
+<a class="button" href="{{dashboardUrl}}">
+Go To Dashboard
+</a>
+</div>
+
+<p>
+Need help? Contact us anytime at
+<a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.
+</p>
+
+<p>
+Website:
+<a href="https://layboka.com">https://layboka.com</a>
+</p>
+
+</div>
+
+<div class="footer">
+
+<p>© 2026 Layboka. All Rights Reserved.</p>
+
+<p>
+AI Sales Executive for Shopify Stores
+</p>
+
+</div>
+
+</div>
+
+</body>
+</html>
