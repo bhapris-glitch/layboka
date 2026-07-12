@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verify Your Email | Layboka</title>
+<style>
+body{
+    margin:0;
+    padding:0;
+    background:#071F14;
+    font-family:Arial,Helvetica,sans-serif;
+    color:#ffffff;
+}
+.wrapper{
+    max-width:600px;
+    margin:40px auto;
+    background:#0D2B1F;
+    border:1px solid #1F4A38;
+    border-radius:16px;
+    overflow:hidden;
+}
+.header{
+    padding:40px 30px 25px;
+    text-align:center;
+    border-bottom:1px solid #1F4A38;
+}
+.logo{
+    font-size:34px;
+    font-weight:700;
+    color:#FF5A2F;
+}
+.tagline{
+    margin-top:4px;
+    font-size:13px;
+    color:#FF8A3D;
+    font-weight:600;
+}
+.content{
+    padding:40px 35px;
+}
+h1{
+    margin:0 0 20px;
+    color:#ffffff;
+    font-size:30px;
+}
+p{
+    color:#D7E6DF;
+    font-size:16px;
+    line-height:1.7;
+}
+.button{
+    display:inline-block;
+    margin:30px 0;
+    padding:16px 34px;
+    background:#FF4B2B;
+    color:#ffffff !important;
+    text-decoration:none;
+    border-radius:10px;
+    font-weight:bold;
+    font-size:16px;
+}
+.notice{
+    background:#123526;
+    border-left:4px solid #FF4B2B;
+    padding:18px;
+    border-radius:8px;
+    color:#D7E6DF;
+    margin-top:20px;
+}
+.footer{
+    text-align:center;
+    padding:30px;
+    border-top:1px solid #1F4A38;
+    color:#A9B9B2;
+    font-size:13px;
+}
+.footer a{
+    color:#FF6A3C;
+    text-decoration:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrapper">
+
+<div class="header">
+
+<div class="logo">
+Layboka
+</div>
+
+<div class="tagline">
+AI Sales Executive
+</div>
+
+</div>
+
+<div class="content">
+
+<h1>Verify Your Email</h1>
+
+<p>
+Hi <strong>{{name}}</strong>,
+</p>
+
+<p>
+Welcome to Layboka.
+</p>
+
+<p>
+Before you start using your AI Sales Executive, please verify your email address. This helps keep your account secure and ensures you receive important notifications.
+</p>
+
+<div style="text-align:center;">
+
+<a href="{{verificationUrl}}" class="button">
+Verify Email
+</a>
+
+</div>
+
+<div class="notice">
+
+<strong>Verification Link</strong><br><br>
+
+This verification link expires in
+<strong>{{expiry}}</strong>.
+
+</div>
+
+<p style="margin-top:30px;">
+If the button doesn't work, copy and paste this link into your browser:
+</p>
+
+<p style="word-break:break-all;color:#FF8A3D;">
+{{verificationUrl}}
+</p>
+
+<p>
+If you didn't create a Layboka account, you can safely ignore this email.
+</p>
+
+<p>
+Thanks,<br>
+<strong>Layboka Team</strong>
+</p>
+
+</div>
+
+<div class="footer">
+
+© 2026 <strong>Layboka</strong>. All rights reserved.<br><br>
+
+<a href="https://layboka.com">
+www.layboka.com
+</a>
+
+</div>
+
+</div>
+
+</body>
+</html>
