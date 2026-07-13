@@ -50,7 +50,7 @@ export async function getInventory(
 |--------------------------------------------------------------------------
 */
 
-export async function getInventoryByShopifyId(
+export async function getInventoryByProduct,(
 
     shopId,
 
