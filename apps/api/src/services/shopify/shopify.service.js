@@ -99,7 +99,67 @@ export async function getRestClient(shopId) {
     });
 
 }
+/*
+|--------------------------------------------------------------------------
+| Create GraphQL Admin Client
+|--------------------------------------------------------------------------
+*/
 
+export function getAdminClient(session) {
+
+    if (!session) {
+
+        throw new Error(
+            "Shopify session is required."
+        );
+
+    }
+
+    return new shopify.clients.Graphql({
+
+        session
+
+    });
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Execute GraphQL Query
+|--------------------------------------------------------------------------
+*/
+
+export async function shopifyGraphQL(
+
+    session,
+
+    query,
+
+    variables = {}
+
+) {
+
+    const client =
+
+        getAdminClient(session);
+
+    const response =
+
+        await client.request(
+
+            query,
+
+            {
+
+                variables
+
+            }
+
+        );
+
+    return response.data;
+
+}
 /*
 |--------------------------------------------------------------------------
 | Validate Access Token
@@ -552,3 +612,42 @@ export async function getLocations(session) {
     return response.data.locations.nodes;
 
 }
+/*
+|--------------------------------------------------------------------------
+| Shopify Service
+|--------------------------------------------------------------------------
+*/
+
+export const ShopifyService = {
+
+    shopify,
+
+    getShop,
+
+    getShopByDomain,
+
+    getRestClient,
+
+    getAdminClient,
+
+    shopifyGraphQL,
+
+    validateAccessToken,
+
+    getShopInformation,
+
+    getProducts,
+
+    getCollections,
+
+    getCustomers,
+
+    getOrders,
+
+    getInventory,
+
+    getLocations
+
+};
+
+export default ShopifyService;
