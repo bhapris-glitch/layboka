@@ -307,3 +307,209 @@ export function validateFile(
     return true;
 
 }
+/*
+|--------------------------------------------------------------------------
+| Upload Image
+|--------------------------------------------------------------------------
+*/
+
+export async function uploadImage(
+
+    file,
+
+    folder = "images"
+
+) {
+
+    validateUpload(file);
+
+    validateMimeType(
+
+        file,
+
+        UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES
+
+    );
+
+    return storeFile(
+
+        file,
+
+        folder
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Document
+|--------------------------------------------------------------------------
+*/
+
+export async function uploadDocument(
+
+    file,
+
+    folder = "documents"
+
+) {
+
+    validateUpload(file);
+
+    validateMimeType(
+
+        file,
+
+        UPLOAD_CONFIG.ALLOWED_DOCUMENT_TYPES
+
+    );
+
+    return storeFile(
+
+        file,
+
+        folder
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Audio
+|--------------------------------------------------------------------------
+*/
+
+export async function uploadAudio(
+
+    file,
+
+    folder = "audio"
+
+) {
+
+    validateUpload(file);
+
+    validateMimeType(
+
+        file,
+
+        UPLOAD_CONFIG.ALLOWED_AUDIO_TYPES
+
+    );
+
+    return storeFile(
+
+        file,
+
+        folder
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Avatar
+|--------------------------------------------------------------------------
+*/
+
+export async function uploadAvatar(
+
+    file
+
+) {
+
+    validateUpload(file);
+
+    validateMimeType(
+
+        file,
+
+        UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES
+
+    );
+
+    const uploaded = await storeFile(
+
+        file,
+
+        "avatars"
+
+    );
+
+    return {
+
+        ...uploaded,
+
+        type: "avatar"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Product Image
+|--------------------------------------------------------------------------
+*/
+
+export async function uploadProductImage(
+
+    file
+
+) {
+
+    validateUpload(file);
+
+    validateMimeType(
+
+        file,
+
+        UPLOAD_CONFIG.ALLOWED_IMAGE_TYPES
+
+    );
+
+    const uploaded = await storeFile(
+
+        file,
+
+        "products"
+
+    );
+
+    return {
+
+        ...uploaded,
+
+        type: "product"
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Generate Public File URL
+|--------------------------------------------------------------------------
+*/
+
+export function generateFileUrl(
+
+    relativePath
+
+) {
+
+    if (!relativePath) {
+
+        return "";
+
+    }
+
+    return `${APP_URL}/${relativePath.replace(
+        /^\/+/,
+        ""
+    )}`;
+
+        }
