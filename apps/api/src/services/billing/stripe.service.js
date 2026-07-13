@@ -444,7 +444,7 @@ export function getStripePriceId(plan) {
 
         premium: process.env.STRIPE_PRICE_PREMIUM,
 
-        enterprise: process.env.STRIPE_PRICE_ENTERPRISE
+        enterprise: null
 
     };
 
