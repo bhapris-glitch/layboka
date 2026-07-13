@@ -272,7 +272,7 @@ export function validateFileSize(
 |--------------------------------------------------------------------------
 */
 
-export function validateFile(
+export function validateUpload(
 
     file,
 
@@ -513,3 +513,488 @@ export function generateFileUrl(
     )}`;
 
         }
+/*
+|--------------------------------------------------------------------------
+| Delete File
+|--------------------------------------------------------------------------
+*/
+
+export async function deleteFile(filePath) {
+
+    try {
+
+        await fs.access(filePath);
+
+        await fs.unlink(filePath);
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+
+            "Delete File Error:",
+
+            error.message
+
+        );
+
+        return false;
+
+    }
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Move File
+|--------------------------------------------------------------------------
+*/
+
+export async function moveFile(
+
+    source,
+
+    destination
+
+) {
+
+    await fs.mkdir(
+
+        path.dirname(destination),
+
+        {
+
+            recursive: true
+
+        }
+
+    );
+
+    await fs.rename(
+
+        source,
+
+        destination
+
+    );
+
+    return destination;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Copy File
+|--------------------------------------------------------------------------
+*/
+
+export async function copyFile(
+
+    source,
+
+    destination
+
+) {
+
+    await fs.mkdir(
+
+        path.dirname(destination),
+
+        {
+
+            recursive: true
+
+        }
+
+    );
+
+    await fs.copyFile(
+
+        source,
+
+        destination
+
+    );
+
+    return destination;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| File Metadata
+|--------------------------------------------------------------------------
+*/
+
+export async function getFileMetadata(
+
+    filePath
+
+) {
+
+    const stats = await fs.stat(filePath);
+
+    return {
+
+        name: path.basename(filePath),
+
+        extension: path.extname(filePath),
+
+        directory: path.dirname(filePath),
+
+        size: stats.size,
+
+        createdAt: stats.birthtime,
+
+        modifiedAt: stats.mtime,
+
+        accessedAt: stats.atime,
+
+        isFile: stats.isFile(),
+
+        isDirectory: stats.isDirectory()
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Optimize Image
+|--------------------------------------------------------------------------
+*/
+
+export async function optimizeImage(
+
+    input,
+
+    output,
+
+    options = {}
+
+) {
+
+    const {
+
+        width = 1200,
+
+        height = null,
+
+        quality = 85,
+
+        format = "webp"
+
+    } = options;
+
+    await sharp(input)
+
+        .resize({
+
+            width,
+
+            height,
+
+            fit: "inside",
+
+            withoutEnlargement: true
+
+        })
+
+        .toFormat(
+
+            format,
+
+            {
+
+                quality
+
+            }
+
+        )
+
+        .toFile(output);
+
+    return output;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Generate Thumbnail
+|--------------------------------------------------------------------------
+*/
+
+export async function generateThumbnail(
+
+    input,
+
+    output,
+
+    size = 300
+
+) {
+
+    await sharp(input)
+
+        .resize(
+
+            size,
+
+            size,
+
+            {
+
+                fit: "cover"
+
+            }
+
+        )
+
+        .webp({
+
+            quality: 80
+
+        })
+
+        .toFile(output);
+
+    return output;
+
+ }
+/*
+|--------------------------------------------------------------------------
+| Upload Analytics
+|--------------------------------------------------------------------------
+*/
+
+export async function trackUploadAnalytics({
+
+    shop,
+
+    visitor = null,
+
+    file,
+
+    uploadTime = 0
+
+}) {
+
+    return {
+
+        shop: shop?._id,
+
+        visitor: visitor?._id || null,
+
+        filename: file.filename,
+
+        mimeType: file.mimetype,
+
+        size: file.size,
+
+        uploadTime,
+
+        uploadedAt: new Date()
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Security Scan
+|--------------------------------------------------------------------------
+*/
+
+export async function securityScan(file) {
+
+    const blockedExtensions = [
+
+        ".exe",
+        ".bat",
+        ".cmd",
+        ".sh",
+        ".php",
+        ".js",
+        ".jar",
+        ".msi"
+
+    ];
+
+    const extension = path.extname(
+
+        file.originalname
+
+    ).toLowerCase();
+
+    if (
+
+        blockedExtensions.includes(
+
+            extension
+
+        )
+
+    ) {
+
+        throw new Error(
+
+            "Blocked file type."
+
+        );
+
+    }
+
+    return {
+
+        safe: true,
+
+        extension,
+
+        scannedAt: new Date()
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Generate Signed URL
+|--------------------------------------------------------------------------
+*/
+
+export async function generateSignedUrl(
+
+    key,
+
+    expiresIn = 3600
+
+) {
+
+    return {
+
+        key,
+
+        expiresIn,
+
+        signedUrl: `${process.env.APP_URL}/uploads/${key}`,
+
+        expiresAt: new Date(
+
+            Date.now() +
+
+            expiresIn * 1000
+
+        )
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Cleanup Temporary Files
+|--------------------------------------------------------------------------
+*/
+
+export async function cleanupTempFiles(
+
+    directory = TEMP_UPLOAD_DIR
+
+) {
+
+    const files = await fs.readdir(
+
+        directory
+
+    );
+
+    let removed = 0;
+
+    for (const file of files) {
+
+        const filePath = path.join(
+
+            directory,
+
+            file
+
+        );
+
+        const stat = await fs.stat(
+
+            filePath
+
+        );
+
+        const age =
+
+            Date.now() -
+
+            stat.mtimeMs;
+
+        if (
+
+            age >
+
+            24 * 60 * 60 * 1000
+
+        ) {
+
+            await fs.unlink(
+
+                filePath
+
+            );
+
+            removed++;
+
+        }
+
+    }
+
+    return {
+
+        success: true,
+
+        removed
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Upload Service
+|--------------------------------------------------------------------------
+*/
+
+export const UploadService = {
+
+    uploadSingle,
+
+    uploadMultiple,
+
+    deleteFile,
+
+    validateFile,
+
+    optimizeImage,
+
+    securityScan,
+
+    generateSignedUrl,
+
+    cleanupTempFiles,
+
+    trackUploadAnalytics
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Default Export
+|--------------------------------------------------------------------------
+*/
+
+export default UploadService;
