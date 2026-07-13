@@ -1,4 +1,10 @@
-import { shopifyGraphQL } from "./shopify.service.js";
+import {
+
+    shopifyGraphQL,
+
+    getAdminClient
+
+} from "./shopify.service.js";
 
 /*
 |--------------------------------------------------------------------------
@@ -447,7 +453,7 @@ document.head.appendChild(s);
 
 `;
 
-    await updateThemeAsset(
+    await updateAsset((
 
         shop,
 
@@ -491,7 +497,7 @@ export async function removeWidget(
 
         "assets/layboka-chatbot.js";
 
-    await deleteThemeAsset(
+    await deleteAsset(
 
         shop,
 
@@ -563,7 +569,7 @@ export async function verifyWidgetInstallation(
 
         "assets/layboka-chatbot.js";
 
-    const asset = await getThemeAsset(
+    const asset = await getAsset(
 
         shop,
 
