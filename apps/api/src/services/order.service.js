@@ -1,142 +1,19 @@
-// File:
-// layboka/apps/api/src/services/order.service.js
-
-import Order from "../models/Order.js";
-import Conversation from "../models/Conversation.js";
-import Visitor from "../models/Visitor.js";
-import Product from "../models/Product.js";
-
 /*
 |--------------------------------------------------------------------------
-| Configuration
+| Imports
 |--------------------------------------------------------------------------
 */
 
-export const ORDER_STATUS = Object.freeze({
+import Order from "../../models/Order.js";
+import Product from "../../models/Product.js";
+import Conversation from "../../models/Conversation.js";
+import Visitor from "../../models/Visitor.js";
+import Shop from "../../models/Shop.js";
 
-    PENDING: "pending",
-
-    CONFIRMED: "confirmed",
-
-    PAID: "paid",
-
-    PROCESSING: "processing",
-
-    FULFILLED: "fulfilled",
-
-    SHIPPED: "shipped",
-
-    DELIVERED: "delivered",
-
-    CANCELLED: "cancelled",
-
-    REFUNDED: "refunded"
-
-});
-
-export const PAYMENT_STATUS = Object.freeze({
-
-    PENDING: "pending",
-
-    PAID: "paid",
-
-    PARTIALLY_PAID: "partially_paid",
-
-    REFUNDED: "refunded",
-
-    PARTIALLY_REFUNDED: "partially_refunded",
-
-    FAILED: "failed"
-
-});
-
-/*
-|--------------------------------------------------------------------------
-| Create Order
-|--------------------------------------------------------------------------
-*/
-
-export async function createOrder(orderData) {
-
-    const order = await Order.create(orderData);
-
-    return order;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Update Order
-|--------------------------------------------------------------------------
-*/
-
-export async function updateOrder(
-
-    orderId,
-
-    updates
-
-) {
-
-    return Order.findByIdAndUpdate(
-
-        orderId,
-
-        updates,
-
-        {
-
-            new: true,
-
-            runValidators: true
-
-        }
-
-    );
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Get Order
-|--------------------------------------------------------------------------
-*/
-
-export async function getOrder(orderId) {
-
-    return Order.findById(orderId)
-
-        .populate("shop")
-
-        .populate("visitor")
-
-        .populate("conversation")
-
-        .populate("products.product");
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Get Order By Shopify Order ID
-|--------------------------------------------------------------------------
-*/
-
-export async function getOrderByShopifyId(
-
-    shopifyOrderId
-
-) {
-
-    return Order.findOne({
-
-        shopifyOrderId
-
-    });
-
-}
-
-/*
+import {
+    calculateRevenueAnalytics,
+    recordAI
+    /*
 |--------------------------------------------------------------------------
 | Get Shop Orders
 |--------------------------------------------------------------------------
@@ -150,368 +27,29 @@ export async function getShopOrders(
 
         page = 1,
 
-        limit = 20
+        limit = ORDER_CONFIG.DEFAULT_LIMIT,
+
+        status,
+
+        financialStatus,
+
+        fulfillmentStatus
 
     } = {}
 
 ) {
 
-    return Order.find({
+    limit = Math.min(
 
-        shop: shopId,
+        Number(limit),
 
-        deleted: false
-
-    })
-
-    .sort({
-
-        createdAt: -1
-
-    })
-
-    .skip(
-
-        (page - 1) * limit
-
-    )
-
-    .limit(limit);
-
-}
-/*
-|--------------------------------------------------------------------------
-| Sync Shopify Order
-|--------------------------------------------------------------------------
-*/
-
-export async function syncShopifyOrder(
-
-    shop,
-
-    shopifyOrder
-
-) {
-
-    if (!shopifyOrder) {
-
-        throw new Error(
-            "Shopify order is required."
-        );
-
-    }
-
-    const existingOrder = await Order.findOne({
-
-        shop: shop._id,
-
-        shopifyOrderId: String(shopifyOrder.id)
-
-    });
-
-    const orderData = {
-
-        orderNumber:
-            shopifyOrder.name ||
-
-            shopifyOrder.order_number,
-
-        financialStatus:
-            shopifyOrder.financial_status,
-
-        fulfillmentStatus:
-            shopifyOrder.fulfillment_status ||
-
-            "unfulfilled",
-
-        currency:
-            shopifyOrder.currency,
-
-        subtotalPrice:
-            Number(shopifyOrder.subtotal_price || 0),
-
-        totalTax:
-            Number(shopifyOrder.total_tax || 0),
-
-        totalDiscount:
-            Number(shopifyOrder.total_discounts || 0),
-
-        totalPrice:
-            Number(shopifyOrder.total_price || 0),
-
-        customer: {
-
-            firstName:
-                shopifyOrder.customer?.first_name || "",
-
-            lastName:
-                shopifyOrder.customer?.last_name || "",
-
-            email:
-                shopifyOrder.customer?.email || ""
-
-        },
-
-        rawData: shopifyOrder,
-
-        syncedAt: new Date()
-
-    };
-
-    if (existingOrder) {
-
-        Object.assign(
-
-            existingOrder,
-
-            orderData
-
-        );
-
-        await existingOrder.save();
-
-        return existingOrder;
-
-    }
-
-    return Order.create({
-
-        shop: shop._id,
-
-        shopifyOrderId:
-            String(shopifyOrder.id),
-
-        ...orderData
-
-    });
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Update Order Status
-|--------------------------------------------------------------------------
-*/
-
-export async function updateOrderStatus(
-
-    orderId,
-
-    updates = {}
-
-) {
-
-    const order = await Order.findById(
-
-        orderId
+        ORDER_CONFIG.MAX_LIMIT
 
     );
 
-    if (!order) {
+    const skip =
 
-        throw new Error(
-            "Order not found."
-        );
-
-    }
-
-    if (updates.financialStatus) {
-
-        order.financialStatus =
-            updates.financialStatus;
-
-    }
-
-    if (updates.fulfillmentStatus) {
-
-        order.fulfillmentStatus =
-            updates.fulfillmentStatus;
-
-    }
-
-    if (updates.paymentStatus) {
-
-        order.paymentStatus =
-            updates.paymentStatus;
-
-    }
-
-    if (updates.status) {
-
-        order.status =
-            updates.status;
-
-    }
-
-    order.updatedAt = new Date();
-
-    await order.save();
-
-    return order;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Cancel Order
-|--------------------------------------------------------------------------
-*/
-
-export async function cancelOrder(
-
-    orderId,
-
-    reason = ""
-
-) {
-
-    const order = await Order.findById(
-
-        orderId
-
-    );
-
-    if (!order) {
-
-        throw new Error(
-            "Order not found."
-        );
-
-    }
-
-    order.status = "cancelled";
-
-    order.cancelled = true;
-
-    order.cancelledAt = new Date();
-
-    order.cancelReason = reason;
-
-    await order.save();
-
-    return order;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Refund Order
-|--------------------------------------------------------------------------
-*/
-
-export async function refundOrder(
-
-    orderId,
-
-    amount = null,
-
-    reason = ""
-
-) {
-
-    const order = await Order.findById(
-
-        orderId
-
-    );
-
-    if (!order) {
-
-        throw new Error(
-            "Order not found."
-        );
-
-    }
-
-    order.refunded = true;
-
-    order.refundedAt = new Date();
-
-    order.refundReason = reason;
-
-    order.refundAmount =
-        amount ||
-
-        order.totalPrice;
-
-    if (
-
-        order.refundAmount >=
-
-        order.totalPrice
-
-    ) {
-
-        order.financialStatus =
-            "refunded";
-
-    } else {
-
-        order.financialStatus =
-            "partially_refunded";
-
-    }
-
-    await order.save();
-
-    return order;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Archive Order
-|--------------------------------------------------------------------------
-*/
-
-export async function archiveOrder(
-
-    orderId
-
-) {
-
-    const order = await Order.findById(
-
-        orderId
-
-    );
-
-    if (!order) {
-
-        throw new Error(
-            "Order not found."
-        );
-
-    }
-
-    order.archived = true;
-
-    order.archivedAt = new Date();
-
-    await order.save();
-
-    return order;
-
-      }
-/*
-|--------------------------------------------------------------------------
-| Order Analytics
-|--------------------------------------------------------------------------
-*/
-
-export async function getOrderAnalytics(
-
-    shopId,
-
-    {
-
-        startDate,
-
-        endDate
-
-    } = {}
-
-) {
+        (Number(page) - 1) * limit;
 
     const query = {
 
@@ -521,205 +59,91 @@ export async function getOrderAnalytics(
 
     };
 
-    if (startDate || endDate) {
+    if (status) {
 
-        query.createdAt = {};
-
-        if (startDate) {
-
-            query.createdAt.$gte = new Date(startDate);
-
-        }
-
-        if (endDate) {
-
-            query.createdAt.$lte = new Date(endDate);
-
-        }
+        query.status = status;
 
     }
 
-    const orders = await Order.find(query).lean();
+    if (financialStatus) {
 
-    const analytics = {
+        query.financialStatus =
 
-        totalOrders: orders.length,
-
-        totalRevenue: 0,
-
-        averageOrderValue: 0,
-
-        totalTax: 0,
-
-        totalShipping: 0,
-
-        totalDiscount: 0,
-
-        totalRefunded: 0,
-
-        paidOrders: 0,
-
-        pendingOrders: 0,
-
-        cancelledOrders: 0
-
-    };
-
-    for (const order of orders) {
-
-        analytics.totalRevenue += Number(order.total || 0);
-
-        analytics.totalTax += Number(order.tax || 0);
-
-        analytics.totalShipping += Number(order.shipping || 0);
-
-        analytics.totalDiscount += Number(order.discount || 0);
-
-        analytics.totalRefunded += Number(order.refundedAmount || 0);
-
-        if (order.financialStatus === "paid") {
-
-            analytics.paidOrders++;
-
-        }
-
-        if (order.financialStatus === "pending") {
-
-            analytics.pendingOrders++;
-
-        }
-
-        if (order.cancelledAt) {
-
-            analytics.cancelledOrders++;
-
-        }
+            financialStatus;
 
     }
 
-    analytics.averageOrderValue =
+    if (fulfillmentStatus) {
 
-        analytics.totalOrders > 0
+        query.fulfillmentStatus =
 
-            ? Number(
+            fulfillmentStatus;
 
-                (
+    }
 
-                    analytics.totalRevenue /
+    const [
 
-                    analytics.totalOrders
+        orders,
 
-                ).toFixed(2)
+        total
+
+    ] = await Promise.all([
+
+        Order.find(query)
+
+            .populate(
+
+                "visitor",
+
+                "firstName lastName email"
 
             )
 
-            : 0;
+            .populate(
 
-    return analytics;
+                "conversation",
 
-}
+                "conversationId"
 
-/*
-|--------------------------------------------------------------------------
-| Revenue Calculation
-|--------------------------------------------------------------------------
-*/
+            )
 
-export async function calculateRevenue(
+            .sort({
 
-    shopId
+                createdAt: -1
 
-) {
+            })
 
-    const analytics =
+            .skip(skip)
 
-        await getOrderAnalytics(shopId);
+            .limit(limit)
+
+            .lean(),
+
+        Order.countDocuments(query)
+
+    ]);
 
     return {
 
-        grossRevenue:
+        orders,
 
-            analytics.totalRevenue,
+        pagination: {
 
-        refunded:
+            page: Number(page),
 
-            analytics.totalRefunded,
+            limit,
 
-        netRevenue:
+            total,
 
-            analytics.totalRevenue -
+            pages: Math.ceil(
 
-            analytics.totalRefunded
+                total / limit
+
+            )
+
+        }
 
     };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Customer Order History
-|--------------------------------------------------------------------------
-*/
-
-export async function getCustomerOrders(
-
-    visitorId,
-
-    limit = 20
-
-) {
-
-    return Order.find({
-
-        visitor: visitorId,
-
-        deleted: false
-
-    })
-
-        .sort({
-
-            createdAt: -1
-
-        })
-
-        .limit(limit)
-
-        .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Recent Orders
-|--------------------------------------------------------------------------
-*/
-
-export async function getRecentOrders(
-
-    shopId,
-
-    limit = 10
-
-) {
-
-    return Order.find({
-
-        shop: shopId,
-
-        deleted: false
-
-    })
-
-        .sort({
-
-            createdAt: -1
-
-        })
-
-        .limit(limit)
-
-        .lean();
 
 }
 
@@ -733,7 +157,9 @@ export async function searchOrders(
 
     shopId,
 
-    keyword
+    keyword,
+
+    limit = ORDER_CONFIG.DEFAULT_LIMIT
 
 ) {
 
@@ -783,7 +209,848 @@ export async function searchOrders(
 
         ]
 
-    }).lean();
+    })
+
+    .sort({
+
+        createdAt: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Recent Orders
+|--------------------------------------------------------------------------
+*/
+
+export async function getRecentOrders(
+
+    shopId,
+
+    limit = 10
+
+) {
+
+    return Order.find({
+
+        shop: shopId,
+
+        deleted: false
+
+    })
+
+    .sort({
+
+        createdAt: -1
+
+    })
+
+    .limit(limit)
+
+    .populate(
+
+        "visitor",
+
+        "firstName lastName"
+
+    )
+
+    .lean();
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Customer Orders
+|--------------------------------------------------------------------------
+*/
+
+export async function getCustomerOrders(
+
+    visitorId,
+
+    limit = ORDER_CONFIG.MAX_LIMIT
+
+) {
+
+    return Order.find({
+
+        visitor: visitorId,
+
+        deleted: false
+
+    })
+
+    .sort({
+
+        createdAt: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+/*
+|--------------------------------------------------------------------------
+| Sync Shopify Order
+|--------------------------------------------------------------------------
+*/
+
+export async function syncShopifyOrder(
+
+    shopId,
+
+    shopifyOrder
+
+) {
+
+    const existingOrder =
+
+        await getOrderByShopifyId(
+
+            shopifyOrder.id,
+
+            shopId
+
+        );
+
+    if (existingOrder) {
+
+        return updateOrder(
+
+            existingOrder._id,
+
+            mapShopifyOrder(
+
+                shopifyOrder
+
+            )
+
+        );
+
+    }
+
+    const visitor =
+
+        await Visitor.findOne({
+
+            shop: shopId,
+
+            email:
+
+                shopifyOrder.email,
+
+            deleted: false
+
+        });
+
+    const conversation =
+
+        visitor
+
+            ? await Conversation.findOne({
+
+                  shop: shopId,
+
+                  visitor: visitor._id,
+
+                  deleted: false
+
+              })
+
+              .sort({
+
+                  createdAt: -1
+
+              })
+
+            : null;
+
+    const orderData = {
+
+        ...mapShopifyOrder(
+
+            shopifyOrder
+
+        ),
+
+        shop: shopId,
+
+        visitor:
+
+            visitor?._id || null,
+
+        conversation:
+
+            conversation?._id || null
+
+    };
+
+    const order =
+
+        await createOrder(
+
+            orderData
+
+        );
+
+    await attributeAIRevenue(
+
+        order,
+
+        conversation
+
+    );
+
+    return order;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| AI Revenue Attribution
+|--------------------------------------------------------------------------
+*/
+
+export async function attributeAIRevenue(
+
+    order,
+
+    conversation
+
+) {
+
+    if (
+
+        !conversation ||
+
+        !order
+
+    ) {
+
+        return null;
+
+    }
+
+    conversation.order = {
+
+        orderId: order._id,
+
+        shopifyOrderId:
+
+            order.shopifyOrderId,
+
+        orderNumber:
+
+            order.orderNumber,
+
+        subtotal:
+
+            order.subtotalPrice,
+
+        tax:
+
+            order.totalTax,
+
+        shipping:
+
+            order.shippingPrice,
+
+        discount:
+
+            order.totalDiscount,
+
+        total:
+
+            order.totalPrice,
+
+        currency:
+
+            order.currency,
+
+        purchased: true,
+
+        purchasedAt:
+
+            order.createdAt
+
+    };
+
+    conversation.aiRevenue = {
+
+        ...conversation.aiRevenue,
+
+        directRevenue:
+
+            Number(
+
+                order.totalPrice || 0
+
+            ),
+
+        totalRevenue:
+
+            Number(
+
+                order.totalPrice || 0
+
+            )
+
+    };
+
+    conversation.resolution =
+
+        "purchase";
+
+    conversation.customerStage =
+
+        "purchased";
+
+    conversation.status =
+
+        "resolved";
+
+    await conversation.save();
+
+    return conversation;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Revenue Analytics
+|--------------------------------------------------------------------------
+*/
+
+export async function calculateOrderRevenue(
+
+    shopId,
+
+    startDate,
+
+    endDate
+
+) {
+
+    const orders =
+
+        await Order.find({
+
+            shop: shopId,
+
+            deleted: false,
+
+            createdAt: {
+
+                $gte: startDate,
+
+                $lte: endDate
+
+            }
+
+        });
+
+    return orders.reduce(
+
+        (
+
+            total,
+
+            order
+
+        ) =>
+
+            total +
+
+            Number(
+
+                order.totalPrice || 0
+
+            ),
+
+        0
+
+    );
+
+}
+/*
+|--------------------------------------------------------------------------
+| Update Order Status
+|--------------------------------------------------------------------------
+*/
+
+export async function updateOrderStatus(
+
+    orderId,
+
+    status,
+
+    additionalData = {}
+
+) {
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+
+        throw new Error(
+
+            "Order not found."
+
+        );
+
+    }
+
+    order.status = status;
+
+    if (
+
+        additionalData.financialStatus !== undefined
+
+    ) {
+
+        order.financialStatus =
+
+            additionalData.financialStatus;
+
+    }
+
+    if (
+
+        additionalData.fulfillmentStatus !== undefined
+
+    ) {
+
+        order.fulfillmentStatus =
+
+            additionalData.fulfillmentStatus;
+
+    }
+
+    if (
+
+        additionalData.cancelReason !== undefined
+
+    ) {
+
+        order.cancelReason =
+
+            additionalData.cancelReason;
+
+    }
+
+    if (
+
+        additionalData.cancelledAt !== undefined
+
+    ) {
+
+        order.cancelledAt =
+
+            additionalData.cancelledAt;
+
+    }
+
+    if (
+
+        additionalData.refundedAt !== undefined
+
+    ) {
+
+        order.refundedAt =
+
+            additionalData.refundedAt;
+
+    }
+
+    if (
+
+        additionalData.fulfilledAt !== undefined
+
+    ) {
+
+        order.fulfilledAt =
+
+            additionalData.fulfilledAt;
+
+    }
+
+    await order.save();
+
+    return order;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Cancel Order
+|--------------------------------------------------------------------------
+*/
+
+export async function cancelOrder(
+
+    orderId,
+
+    reason = ""
+
+) {
+
+    return updateOrderStatus(
+
+        orderId,
+
+        "cancelled",
+
+        {
+
+            financialStatus:
+
+                "voided",
+
+            cancelReason: reason,
+
+            cancelledAt:
+
+                new Date()
+
+        }
+
+    );
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Refund Order
+|--------------------------------------------------------------------------
+*/
+
+export async function refundOrder(
+
+    orderId,
+
+    amount = 0
+
+) {
+
+    const order =
+
+        await updateOrderStatus(
+
+            orderId,
+
+            "refunded",
+
+            {
+
+                financialStatus:
+
+                    "refunded",
+
+                refundedAt:
+
+                    new Date()
+
+            }
+
+        );
+
+    order.refundAmount =
+
+        Number(amount);
+
+    await order.save();
+
+    return order;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Archive Order
+|--------------------------------------------------------------------------
+*/
+
+export async function archiveOrder(
+
+    orderId
+
+) {
+
+    return Order.findByIdAndUpdate(
+
+        orderId,
+
+        {
+
+            archived: true,
+
+            archivedAt:
+
+                new Date()
+
+        },
+
+        {
+
+            new: true
+
+        }
+
+    );
+
+            }
+/*
+|--------------------------------------------------------------------------
+| Order Analytics
+|--------------------------------------------------------------------------
+*/
+
+export async function getOrderAnalytics(
+
+    shopId,
+
+    {
+
+        startDate,
+
+        endDate
+
+    } = {}
+
+) {
+
+    const query = {
+
+        shop: shopId,
+
+        deleted: false
+
+    };
+
+    if (
+
+        startDate ||
+
+        endDate
+
+    ) {
+
+        query.createdAt = {};
+
+        if (startDate) {
+
+            query.createdAt.$gte =
+
+                new Date(startDate);
+
+        }
+
+        if (endDate) {
+
+            query.createdAt.$lte =
+
+                new Date(endDate);
+
+        }
+
+    }
+
+    const orders =
+
+        await Order.find(query).lean();
+
+    const analytics = {
+
+        totalOrders: orders.length,
+
+        totalRevenue: 0,
+
+        averageOrderValue: 0,
+
+        fulfilledOrders: 0,
+
+        cancelledOrders: 0,
+
+        refundedOrders: 0,
+
+        aiAttributedOrders: 0,
+
+        aiRevenue: 0
+
+    };
+
+    for (const order of orders) {
+
+        const total = Number(
+
+            order.totalPrice || 0
+
+        );
+
+        analytics.totalRevenue += total;
+
+        if (
+
+            order.fulfillmentStatus ===
+
+            "fulfilled"
+
+        ) {
+
+            analytics.fulfilledOrders++;
+
+        }
+
+        if (
+
+            order.status ===
+
+            "cancelled"
+
+        ) {
+
+            analytics.cancelledOrders++;
+
+        }
+
+        if (
+
+            order.status ===
+
+            "refunded"
+
+        ) {
+
+            analytics.refundedOrders++;
+
+        }
+
+        if (
+
+            order.conversation
+
+        ) {
+
+            analytics.aiAttributedOrders++;
+
+            analytics.aiRevenue += total;
+
+        }
+
+    }
+
+    analytics.averageOrderValue =
+
+        analytics.totalOrders
+
+            ? analytics.totalRevenue /
+
+              analytics.totalOrders
+
+            : 0;
+
+    return analytics;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Revenue Calculation
+|--------------------------------------------------------------------------
+*/
+
+export async function calculateRevenue(
+
+    shopId,
+
+    {
+
+        startDate,
+
+        endDate
+
+    } = {}
+
+) {
+
+    const query = {
+
+        shop: shopId,
+
+        deleted: false
+
+    };
+
+    if (
+
+        startDate ||
+
+        endDate
+
+    ) {
+
+        query.createdAt = {};
+
+        if (startDate) {
+
+            query.createdAt.$gte =
+
+                new Date(startDate);
+
+        }
+
+        if (endDate) {
+
+            query.createdAt.$lte =
+
+                new Date(endDate);
+
+        }
+
+    }
+
+    const orders =
+
+        await Order.find(query)
+
+        .select(
+
+            "totalPrice"
+
+        )
+
+        .lean();
+
+    return orders.reduce(
+
+        (
+
+            total,
+
+            order
+
+        ) =>
+
+            total +
+
+            Number(
+
+                order.totalPrice || 0
+
+            ),
+
+        0
+
+    );
 
 }
 
@@ -809,29 +1076,37 @@ export async function filterOrders(
 
     };
 
-    if (filters.financialStatus) {
+    Object.entries(
 
-        query.financialStatus =
+        filters
 
-            filters.financialStatus;
+    ).forEach(
 
-    }
+        ([
 
-    if (filters.fulfillmentStatus) {
+            key,
 
-        query.fulfillmentStatus =
+            value
 
-            filters.fulfillmentStatus;
+        ]) => {
 
-    }
+            if (
 
-    if (filters.customerId) {
+                value !== undefined &&
 
-        query.visitor =
+                value !== null &&
 
-            filters.customerId;
+                value !== ""
 
-    }
+            ) {
+
+                query[key] = value;
+
+            }
+
+        }
+
+    );
 
     return Order.find(query)
 
@@ -844,60 +1119,125 @@ export async function filterOrders(
         .lean();
 
 }
-
 /*
 |--------------------------------------------------------------------------
-| Shopify Webhook Helpers
+| Shopify Webhook Handlers
 |--------------------------------------------------------------------------
 */
 
 export async function handleOrderCreated(
 
-    orderData
+    shopId,
+
+    shopifyOrder
 
 ) {
 
-    return syncOrder(orderData);
+    try {
+
+        return await syncShopifyOrder(
+
+            shopId,
+
+            shopifyOrder
+
+        );
+
+    } catch (error) {
+
+        console.error(
+
+            "Order Created Webhook Error:",
+
+            error
+
+        );
+
+        throw error;
+
+    }
 
 }
+
+/*
+|--------------------------------------------------------------------------
+| Handle Order Updated
+|--------------------------------------------------------------------------
+*/
 
 export async function handleOrderUpdated(
 
-    orderData
+    shopId,
+
+    shopifyOrder
 
 ) {
 
-    return syncOrder(orderData);
+    try {
+
+        return await syncShopifyOrder(
+
+            shopId,
+
+            shopifyOrder
+
+        );
+
+    } catch (error) {
+
+        console.error(
+
+            "Order Updated Webhook Error:",
+
+            error
+
+        );
+
+        throw error;
+
+    }
 
 }
 
+/*
+|--------------------------------------------------------------------------
+| Handle Order Deleted
+|--------------------------------------------------------------------------
+*/
+
 export async function handleOrderDeleted(
+
+    shopId,
 
     shopifyOrderId
 
 ) {
 
-    return Order.findOneAndUpdate(
+    const order =
 
-        {
+        await getOrderByShopifyId(
 
-            shopifyOrderId
+            shopifyOrderId,
 
-        },
+            shopId
 
-        {
+        );
 
-            deleted: true
+    if (!order) {
 
-        },
+        return null;
 
-        {
+    }
 
-            new: true
+    order.deleted = true;
 
-        }
+    order.deletedAt =
 
-    );
+        new Date();
+
+    await order.save();
+
+    return order;
 
 }
 
@@ -909,25 +1249,35 @@ export async function handleOrderDeleted(
 
 export const OrderService = {
 
-    syncOrder,
-
-    getOrderById,
-
-    getOrderByShopifyId,
+    createOrder,
 
     updateOrder,
 
-    deleteOrder,
+    getOrder,
+
+    getOrderByShopifyId,
+
+    getShopOrders,
+
+    searchOrders,
+
+    getRecentOrders,
+
+    getCustomerOrders,
+
+    syncShopifyOrder,
+
+    updateOrderStatus,
+
+    cancelOrder,
+
+    refundOrder,
+
+    archiveOrder,
 
     getOrderAnalytics,
 
     calculateRevenue,
-
-    getCustomerOrders,
-
-    getRecentOrders,
-
-    searchOrders,
 
     filterOrders,
 
