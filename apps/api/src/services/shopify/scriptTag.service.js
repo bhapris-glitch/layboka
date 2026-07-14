@@ -88,7 +88,7 @@ async function shopifyRequest(
 |--------------------------------------------------------------------------
 */
 
-export async function getScriptTags(shop) {
+export async function findLaybokaScript(shop) {
 
     const result = await shopifyRequest(
 
@@ -135,7 +135,7 @@ export async function findLaybokaScript(
 
 export async function installScriptTag(shop) {
 
-    const existing = await getScriptTag(shop);
+    const existing = await findLaybokaScript(shop);
 
     if (existing) {
 
@@ -175,7 +175,7 @@ export async function installScriptTag(shop) {
 
 export async function updateScriptTag(shop) {
 
-    const scriptTag = await getScriptTag(shop);
+    const scriptTag = await findLaybokaScript(shop);
 
     if (!scriptTag) {
 
@@ -219,7 +219,7 @@ export async function updateScriptTag(shop) {
 
 export async function removeScriptTag(shop) {
 
-    const scriptTag = await getScriptTag(shop);
+    const scriptTag = await findLaybokaScript(shop);
 
     if (!scriptTag) {
 
@@ -295,7 +295,7 @@ export async function ensureSingleInstallation(shop) {
 
 export async function validateInstallation(shop) {
 
-    const scriptTag = await getScriptTag(shop);
+    const scriptTag = await findLaybokaScript(shop);
 
     if (!scriptTag) {
 
@@ -424,7 +424,7 @@ export async function synchronizeScriptTag(shop) {
 
     const status =
 
-        await getScriptTagStatus(shop);
+        await findLaybokaScriptStatus(shop);
 
     shop.scriptTag = {
 
@@ -458,7 +458,7 @@ export async function healthCheck(shop) {
 
         const status =
 
-            await getScriptTagStatus(shop);
+            await findLaybokaScriptStatus(shop);
 
         return {
 
@@ -510,7 +510,7 @@ export const ScriptTagService = {
 
     ensureScriptTag,
 
-    getScriptTagStatus,
+    findLaybokaScriptStatus,
 
     reinstallScriptTag,
 
