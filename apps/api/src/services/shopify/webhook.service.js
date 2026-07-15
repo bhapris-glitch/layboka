@@ -1,45 +1,228 @@
+/*
+|--------------------------------------------------------------------------
+| Services
+|--------------------------------------------------------------------------
+*/
+
 import crypto from "crypto";
 
+import ShopifyService from "./shopify.service.js";
+import OrderService from "../order/order.service.js";
+import ProductService from "../product/product.service.js";
+import CustomerService from "../customer/customer.service.js";
+import InventoryService from "../inventory/inventory.service.js";
+import AnalyticsService from "../analytics/analytics.service.js";
+import ConversationService from "../conversation/conversation.service.js";
+import EmailService from "../email/email.service.js";
+
+/*
+|--------------------------------------------------------------------------
+| Models
+|--------------------------------------------------------------------------
+*/
+
 import Shop from "../../models/Shop.js";
-import Product from "../../models/Product.js";
 import Order from "../../models/Order.js";
-import Visitor from "../../models/Visitor.js";
+import Product from "../../models/Product.js";
+import Customer from "../../models/Customer.js";
+import Inventory from "../../models/Inventory.js";
 import Conversation from "../../models/Conversation.js";
 
 /*
 |--------------------------------------------------------------------------
-| Supported Shopify Webhooks
+| Configuration
 |--------------------------------------------------------------------------
 */
 
-export const SHOPIFY_WEBHOOKS = Object.freeze({
+const {
+
+    SHOPIFY_API_SECRET,
+
+    SHOPIFY_API_VERSION,
+
+    NODE_ENV
+
+} = process.env;
+
+/*
+|--------------------------------------------------------------------------
+| Logger
+|--------------------------------------------------------------------------
+*/
+
+const logger = {
+
+    info(message, meta = {}) {
+
+        console.log(
+
+            `[Webhook] ${message}`,
+
+            meta
+
+        );
+
+    },
+
+    warn(message, meta = {}) {
+
+        console.warn(
+
+            `[Webhook] ${message}`,
+
+            meta
+
+        );
+
+    },
+
+    error(message, meta = {}) {
+
+        console.error(
+
+            `[Webhook] ${message}`,
+
+            meta
+
+        );
+
+    }
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Supported Shopify Webhook Topics
+|--------------------------------------------------------------------------
+*/
+
+export const WEBHOOK_TOPICS = Object.freeze({
+
+    /*
+    |--------------------------------------------------------------------------
+    | Orders
+    |--------------------------------------------------------------------------
+    */
+
+    ORDER_CREATED: "orders/create",
+
+    ORDER_UPDATED: "orders/updated",
+
+    ORDER_CANCELLED: "orders/cancelled",
+
+    ORDER_PAID: "orders/paid",
+
+    ORDER_DELETED: "orders/delete",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Products
+    |--------------------------------------------------------------------------
+    */
+
+    PRODUCT_CREATED: "products/create",
+
+    PRODUCT_UPDATED: "products/update",
+
+    PRODUCT_DELETED: "products/delete",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Customers
+    |--------------------------------------------------------------------------
+    */
+
+    CUSTOMER_CREATED: "customers/create",
+
+    CUSTOMER_UPDATED: "customers/update",
+
+    CUSTOMER_DELETED: "customers/delete",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inventory
+    |--------------------------------------------------------------------------
+    */
+
+    INVENTORY_UPDATED: "inventory_levels/update",
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shop
+    |--------------------------------------------------------------------------
+    */
+
+    SHOP_UPDATED: "shop/update",
 
     APP_UNINSTALLED: "app/uninstalled",
 
-    SHOP_UPDATE: "shop/update",
+    /*
+    |--------------------------------------------------------------------------
+    | GDPR
+    |--------------------------------------------------------------------------
+    */
 
-    PRODUCTS_CREATE: "products/create",
+    CUSTOMERS_DATA_REQUEST: "customers/data_request",
 
-    PRODUCTS_UPDATE: "products/update",
+    CUSTOMERS_REDACT: "customers/redact",
 
-    PRODUCTS_DELETE: "products/delete",
-
-    ORDERS_CREATE: "orders/create",
-
-    ORDERS_UPDATED: "orders/updated",
-
-    ORDERS_PAID: "orders/paid",
-
-    ORDERS_CANCELLED: "orders/cancelled",
-
-    CUSTOMERS_CREATE: "customers/create",
-
-    CUSTOMERS_UPDATE: "customers/update",
-
-    CARTS_UPDATE: "carts/update"
+    SHOP_REDACT: "shop/redact"
 
 });
 
+/*
+|--------------------------------------------------------------------------
+| Helper Functions
+|--------------------------------------------------------------------------
+*/
+
+function getWebhookTopic(headers = {}) {
+
+    return (
+
+        headers["x-shopify-topic"] ||
+
+        headers["X-Shopify-Topic"] ||
+
+        ""
+
+    );
+
+}
+
+function getShopDomain(headers = {}) {
+
+    return (
+
+        headers["x-shopify-shop-domain"] ||
+
+        headers["X-Shopify-Shop-Domain"] ||
+
+        ""
+
+    );
+
+}
+
+function getWebhookId(headers = {}) {
+
+    return (
+
+        headers["x-shopify-webhook-id"] ||
+
+        headers["X-Shopify-Webhook-Id"] ||
+
+        ""
+
+    );
+
+}
+
+function isProduction() {
+
+    return NODE_ENV === "production";
+
+}
 /*
 |--------------------------------------------------------------------------
 | Verify Shopify Webhook Signature
@@ -50,354 +233,198 @@ export function verifyWebhookSignature(
 
     rawBody,
 
-    hmacHeader
+    signature
 
 ) {
 
-    const secret = process.env.SHOPIFY_API_SECRET;
+    try {
 
-    if (!secret) {
+        if (!SHOPIFY_API_SECRET) {
 
-        throw new Error(
+            throw new Error(
 
-            "SHOPIFY_API_SECRET is missing."
+                "SHOPIFY_API_SECRET is missing."
+
+            );
+
+        }
+
+
+        if (!rawBody || !signature) {
+
+            return false;
+
+        }
+
+
+        const generatedSignature =
+
+            crypto
+
+                .createHmac(
+
+                    "sha256",
+
+                    SHOPIFY_API_SECRET
+
+                )
+
+                .update(
+
+                    rawBody,
+
+                    "utf8"
+
+                )
+
+                .digest(
+
+                    "base64"
+
+                );
+
+
+        return crypto.timingSafeEqual(
+
+            Buffer.from(generatedSignature),
+
+            Buffer.from(signature)
 
         );
 
-    }
 
-    const generatedHmac = crypto
+    } catch (error) {
 
-        .createHmac(
+        logger.error(
 
-            "sha256",
+            "Webhook signature verification failed.",
 
-            secret
+            {
 
-        )
+                error:
 
-        .update(rawBody, "utf8")
+                    error.message
 
-        .digest("base64");
+            }
 
-    const generatedBuffer = Buffer.from(
+        );
 
-        generatedHmac
-
-    );
-
-    const receivedBuffer = Buffer.from(
-
-        hmacHeader || ""
-
-    );
-
-    if (
-
-        generatedBuffer.length !==
-
-        receivedBuffer.length
-
-    ) {
 
         return false;
 
     }
 
-    return crypto.timingSafeEqual(
-
-        generatedBuffer,
-
-        receivedBuffer
-
-    );
-
 }
+
 
 /*
 |--------------------------------------------------------------------------
-| Parse Webhook Headers
+| Get Webhook Context
 |--------------------------------------------------------------------------
 */
 
-export function getWebhookContext(headers = {}) {
+export async function getWebhookContext(
 
-    return {
-
-        topic:
-
-            headers["x-shopify-topic"],
-
-        shop:
-
-            headers["x-shopify-shop-domain"],
-
-        webhookId:
-
-            headers["x-shopify-webhook-id"],
-
-        apiVersion:
-
-            headers["x-shopify-api-version"],
-
-        triggeredAt:
-
-            new Date()
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Find Shop
-|--------------------------------------------------------------------------
-*/
-
-export async function findShop(
-
-    shopDomain
-
-) {
-
-    return Shop.findOne({
-
-        shopDomain,
-
-        isInstalled: true,
-
-        deleted: false
-
-    });
-
-}
-/*
-|--------------------------------------------------------------------------
-| Product Webhook Handler
-|--------------------------------------------------------------------------
-*/
-
-export async function handleProductWebhook(
-
-    shop,
-
-    topic,
-
-    payload
-
-) {
-
-    switch (topic) {
-
-        case "products/create":
-
-            return handleProductCreate(
-
-                shop,
-
-                payload
-
-            );
-
-        case "products/update":
-
-            return handleProductUpdate(
-
-                shop,
-
-                payload
-
-            );
-
-        case "products/delete":
-
-            return handleProductDelete(
-
-                shop,
-
-                payload
-
-            );
-
-        default:
-
-            return null;
-
-    }
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Product Create
-|--------------------------------------------------------------------------
-*/
-
-export async function handleProductCreate(
-
-    shop,
-
-    payload
+    req
 
 ) {
 
     try {
 
-        const product =
+        const headers = req.headers || {};
 
-            await syncProduct(
 
-                shop,
+        const topic =
 
-                payload
+            getWebhookTopic(
 
-            );
-
-        return {
-
-            success: true,
-
-            action: "created",
-
-            product
-
-        };
-
-    } catch (error) {
-
-        console.error(
-
-            "Product Create Webhook:",
-
-            error
-
-        );
-
-        throw error;
-
-    }
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Product Update
-|--------------------------------------------------------------------------
-*/
-
-export async function handleProductUpdate(
-
-    shop,
-
-    payload
-
-) {
-
-    try {
-
-        const product =
-
-            await syncProduct(
-
-                shop,
-
-                payload
+                headers
 
             );
 
-        return {
 
-            success: true,
+        const shopDomain =
 
-            action: "updated",
+            getShopDomain(
 
-            product
+                headers
 
-        };
+            );
 
-    } catch (error) {
 
-        console.error(
+        const webhookId =
 
-            "Product Update Webhook:",
+            getWebhookId(
 
-            error
+                headers
 
-        );
+            );
 
-        throw error;
 
-    }
+        if (!shopDomain) {
 
-}
+            throw new Error(
 
-/*
-|--------------------------------------------------------------------------
-| Product Delete
-|--------------------------------------------------------------------------
-*/
+                "Shop domain missing from webhook."
 
-export async function handleProductDelete(
+            );
 
-    shop,
+        }
 
-    payload
 
-) {
+        const shop =
 
-    try {
+            await Shop.findOne({
 
-        const product =
-
-            await Product.findOne({
-
-                shop: shop._id,
-
-                shopifyProductId: String(
-
-                    payload.id
-
-                )
+                shopDomain
 
             });
 
-        if (!product) {
 
-            return {
+        if (!shop) {
 
-                success: false,
+            throw new Error(
 
-                message: "Product not found."
+                `Shop not found: ${shopDomain}`
 
-            };
+            );
 
         }
 
-        product.deleted = true;
-
-        product.deletedAt = new Date();
-
-        product.status = "deleted";
-
-        await product.save();
 
         return {
 
-            success: true,
+            shop,
 
-            action: "deleted"
+            shopId: shop._id,
+
+            shopDomain,
+
+            topic,
+
+            webhookId,
+
+            payload: req.body
 
         };
 
+
     } catch (error) {
 
-        console.error(
+        logger.error(
 
-            "Product Delete Webhook:",
+            "Unable to create webhook context.",
 
-            error
+            {
+
+                error:
+
+                    error.message
+
+            }
 
         );
+
 
         throw error;
 
@@ -405,1452 +432,1030 @@ export async function handleProductDelete(
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Product Synchronization
+| Process Webhook
 |--------------------------------------------------------------------------
 */
 
-export async function syncProduct(
+export async function processWebhook(
 
-    shop,
-
-    payload
+    context
 
 ) {
 
-    let product =
+    try {
 
-        await Product.findOne({
+        const {
 
-            shop: shop._id,
+            topic
 
-            shopifyProductId: String(
+        } = context;
 
-                payload.id
 
-            )
+        logger.info(
 
-        });
+            "Processing webhook.",
 
-    if (!product) {
+            {
 
-        product = new Product({
+                topic,
 
-            shop: shop._id,
+                shop:
 
-            shopifyProductId: String(
+                    context.shopDomain
 
-                payload.id
-
-            )
-
-        });
-
-    }
-
-    product.title =
-        payload.title ?? "";
-
-    product.handle =
-        payload.handle ?? "";
-
-    product.description =
-        payload.body_html ?? "";
-
-    product.vendor =
-        payload.vendor ?? "";
-
-    product.productType =
-        payload.product_type ?? "";
-
-    product.tags =
-        payload.tags
-            ? payload.tags
-                  .split(",")
-                  .map(tag => tag.trim())
-            : [];
-
-    product.status =
-        payload.status ?? "active";
-
-    product.published =
-        payload.status === "active";
-
-    /*
-    |--------------------------------------------------------------------------
-    | Product Images
-    |--------------------------------------------------------------------------
-    */
-
-    product.images =
-
-        (payload.images || []).map(
-
-            image => ({
-
-                shopifyImageId:
-
-                    String(image.id),
-
-                src: image.src,
-
-                alt:
-
-                    image.alt ||
-
-                    ""
-
-            })
+            }
 
         );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Variants
-    |--------------------------------------------------------------------------
-    */
 
-    product.variants =
-        payload.variants || [];
+        switch (topic) {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Inventory
-    |--------------------------------------------------------------------------
-    */
 
-    await updateInventory(
+            case WEBHOOK_TOPICS.ORDER_CREATED:
 
-        product,
+                return handleOrderCreated(
 
-        payload
+                    context
 
-    );
+                );
 
-    await product.save();
 
-    return product;
+            case WEBHOOK_TOPICS.ORDER_UPDATED:
 
-}
+                return handleOrderUpdated(
 
-/*
-|--------------------------------------------------------------------------
-| Inventory Updates
-|--------------------------------------------------------------------------
-*/
+                    context
 
-export async function updateInventory(
+                );
 
-    product,
 
-    payload
+            case WEBHOOK_TOPICS.ORDER_CANCELLED:
 
-) {
+                return handleOrderCancelled(
 
-    const variants =
+                    context
 
-        payload.variants || [];
+                );
 
-    let totalInventory = 0;
 
-    let minPrice = null;
+            case WEBHOOK_TOPICS.ORDER_PAID:
 
-    let compareAtPrice = null;
+                return handleOrderPaid(
 
-    for (const variant of variants) {
+                    context
 
-        totalInventory +=
+                );
 
-            Number(
 
-                variant.inventory_quantity || 0
+            case WEBHOOK_TOPICS.ORDER_DELETED:
 
-            );
+                return handleOrderDeleted(
 
-        const price =
+                    context
 
-            Number(
+                );
 
-                variant.price || 0
 
-            );
+            case WEBHOOK_TOPICS.PRODUCT_CREATED:
 
-        if (
+                return handleProductCreated(
 
-            minPrice === null ||
+                    context
 
-            price < minPrice
+                );
 
-        ) {
 
-            minPrice = price;
+            case WEBHOOK_TOPICS.PRODUCT_UPDATED:
+
+                return handleProductUpdated(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.PRODUCT_DELETED:
+
+                return handleProductDeleted(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.CUSTOMER_CREATED:
+
+                return handleCustomerCreated(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.CUSTOMER_UPDATED:
+
+                return handleCustomerUpdated(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.CUSTOMER_DELETED:
+
+                return handleCustomerDeleted(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.INVENTORY_UPDATED:
+
+                return handleInventoryLevelUpdated(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.SHOP_UPDATED:
+
+                return handleShopUpdate(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.APP_UNINSTALLED:
+
+                return handleAppUninstalled(
+
+                    context
+
+                );
+
+
+            case WEBHOOK_TOPICS.CUSTOMERS_DATA_REQUEST:
+
+            case WEBHOOK_TOPICS.CUSTOMERS_REDACT:
+
+            case WEBHOOK_TOPICS.SHOP_REDACT:
+
+                return handleGdprWebhook(
+
+                    context
+
+                );
+
+
+            default:
+
+                logger.warn(
+
+                    "Unhandled webhook topic.",
+
+                    {
+
+                        topic
+
+                    }
+
+                );
+
+
+                return {
+
+                    processed: false,
+
+                    reason: "Unsupported webhook topic"
+
+                };
 
         }
 
+
+    } catch (error) {
+
+        logger.error(
+
+            "Webhook processing failed.",
+
+            {
+
+                error:
+
+                    error.message,
+
+                topic:
+
+                    context?.topic
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
+/*
+|--------------------------------------------------------------------------
+| Handle Order Created Webhook
+|--------------------------------------------------------------------------
+*/
+
+export async function handleOrderCreated(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+
+        logger.info(
+
+            "Processing order created webhook.",
+
+            {
+
+                shop:
+
+                    shop.shopDomain,
+
+                orderId:
+
+                    payload?.id
+
+            }
+
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create Order
+        |--------------------------------------------------------------------------
+        */
+
+        const order =
+
+            await OrderService.handleOrderCreated(
+
+                shop._id,
+
+                payload
+
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Analytics Update
+        |--------------------------------------------------------------------------
+        */
+
+        await AnalyticsService.trackOrderCreated(
+
+            shop._id,
+
+            order
+
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Conversation / AI Memory Update
+        |--------------------------------------------------------------------------
+        */
+
         if (
 
-            variant.compare_at_price
+            order.customer
 
         ) {
 
-            compareAtPrice = Number(
+            await ConversationService.updateCustomerOrderContext(
 
-                variant.compare_at_price
+                shop._id,
+
+                order.customer,
+
+                order
 
             );
 
         }
 
-    }
 
-    product.inventoryQuantity =
-        totalInventory;
+        /*
+        |--------------------------------------------------------------------------
+        | Email Automation
+        |--------------------------------------------------------------------------
+        */
 
-    product.price =
-        minPrice || 0;
+        await EmailService.sendOrderCreatedEmail(
 
-    product.compareAtPrice =
-        compareAtPrice || 0;
+            shop._id,
 
-    product.inStock =
-        totalInventory > 0;
+            order
 
-}
-/*
-|--------------------------------------------------------------------------
-| Order Webhook Router
-|--------------------------------------------------------------------------
-*/
+        );
 
-export async function handleOrderWebhook(
 
-    shop,
+        return {
 
-    topic,
+            processed: true,
 
-    payload
+            event: "order_created",
 
-) {
+            order
 
-    switch (topic) {
+        };
 
-        case "orders/create":
 
-            return handleOrderCreate(
+    } catch (error) {
 
-                shop,
 
-                payload
+        logger.error(
 
-            );
+            "Order created webhook failed.",
 
-        case "orders/updated":
+            {
 
-            return handleOrderUpdated(
+                error:
 
-                shop,
+                    error.message
 
-                payload
+            }
 
-            );
+        );
 
-        case "orders/paid":
 
-            return handleOrderPaid(
-
-                shop,
-
-                payload
-
-            );
-
-        case "orders/cancelled":
-
-            return handleOrderCancelled(
-
-                shop,
-
-                payload
-
-            );
-
-        case "orders/fulfilled":
-
-            return handleOrderFulfilled(
-
-                shop,
-
-                payload
-
-            );
-
-        default:
-
-            return null;
+        throw error;
 
     }
 
 }
 
-/*
-|--------------------------------------------------------------------------
-| Order Created
-|--------------------------------------------------------------------------
-*/
-
-export async function handleOrderCreate(
-
-    shop,
-
-    payload
-
-) {
-
-    const order = await syncOrder(
-
-        shop,
-
-        payload
-
-    );
-
-    await attributeRevenue(
-
-        shop,
-
-        order
-
-    );
-
-    await trackAIConversion(
-
-        shop,
-
-        order
-
-    );
-
-    return {
-
-        success: true,
-
-        action: "created",
-
-        order
-
-    };
-
-}
 
 /*
 |--------------------------------------------------------------------------
-| Order Updated
+| Handle Order Updated Webhook
 |--------------------------------------------------------------------------
 */
 
 export async function handleOrderUpdated(
 
-    shop,
-
-    payload
+    context
 
 ) {
 
-    const order = await syncOrder(
+    try {
 
-        shop,
 
-        payload
+        const {
 
-    );
+            shop,
 
-    return {
+            payload
 
-        success: true,
+        } = context;
 
-        action: "updated",
 
-        order
 
-    };
+        logger.info(
 
-}
+            "Processing order updated webhook.",
 
+            {
+
+                shop:
+
+                    shop.shopDomain,
+
+                orderId:
+
+                    payload?.id
+
+            }
+
+        );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Update Order
+        |--------------------------------------------------------------------------
+        */
+
+        const order =
+
+            await OrderService.handleOrderUpdated(
+
+                shop._id,
+
+                payload
+
+            );
+
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Analytics Sync
+        |--------------------------------------------------------------------------
+        */
+
+        await AnalyticsService.trackOrderUpdated(
+
+            shop._id,
+
+            order
+
+        );
+
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Customer Conversation Update
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            order.customer
+
+        ) {
+
+
+            await ConversationService.updateCustomerOrderContext(
+
+                shop._id,
+
+                order.customer,
+
+                order
+
+            );
+
+
+        }
+
+
+
+        return {
+
+            processed: true,
+
+            event:
+
+                "order_updated",
+
+            order
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Order updated webhook failed.",
+
+            {
+
+                error:
+
+                    error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+                }
 /*
 |--------------------------------------------------------------------------
-| Order Paid
-|--------------------------------------------------------------------------
-*/
-
-export async function handleOrderPaid(
-
-    shop,
-
-    payload
-
-) {
-
-    const order = await syncOrder(
-
-        shop,
-
-        payload
-
-    );
-
-    order.financialStatus = "paid";
-
-    order.paid = true;
-
-    order.paidAt = new Date();
-
-    await order.save();
-
-    await attributeRevenue(
-
-        shop,
-
-        order
-
-    );
-
-    await trackAIConversion(
-
-        shop,
-
-        order
-
-    );
-
-    return {
-
-        success: true,
-
-        action: "paid",
-
-        order
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Order Cancelled
+| Handle Order Cancelled
 |--------------------------------------------------------------------------
 */
 
 export async function handleOrderCancelled(
 
-    shop,
-
-    payload
+    context
 
 ) {
 
-    const order = await syncOrder(
+    try {
 
-        shop,
+        const {
 
-        payload
+            shop,
 
-    );
+            payload
 
-    order.cancelled = true;
+        } = context;
 
-    order.cancelledAt = new Date();
+        logger.info(
 
-    order.status = "cancelled";
+            "Processing order cancelled webhook.",
 
-    await order.save();
+            {
 
-    return {
+                shop: shop.shopDomain,
 
-        success: true,
+                orderId: payload?.id
 
-        action: "cancelled",
-
-        order
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Order Fulfilled
-|--------------------------------------------------------------------------
-*/
-
-export async function handleOrderFulfilled(
-
-    shop,
-
-    payload
-
-) {
-
-    const order = await syncOrder(
-
-        shop,
-
-        payload
-
-    );
-
-    order.fulfillmentStatus = "fulfilled";
-
-    order.fulfilled = true;
-
-    order.fulfilledAt = new Date();
-
-    await order.save();
-
-    return {
-
-        success: true,
-
-        action: "fulfilled",
-
-        order
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Order Synchronization
-|--------------------------------------------------------------------------
-*/
-
-export async function syncOrder(
-
-    shop,
-
-    payload
-
-) {
-
-    let order = await Order.findOne({
-
-        shop: shop._id,
-
-        shopifyOrderId: String(payload.id)
-
-    });
-
-    if (!order) {
-
-        order = new Order({
-
-            shop: shop._id,
-
-            shopifyOrderId: String(payload.id)
-
-        });
-
-    }
-
-    order.orderNumber =
-        payload.name || "";
-
-    order.customerEmail =
-        payload.email || "";
-
-    order.currency =
-        payload.currency || "USD";
-
-    order.financialStatus =
-        payload.financial_status || "";
-
-    order.fulfillmentStatus =
-        payload.fulfillment_status || "";
-
-    order.subtotal =
-        Number(
-
-            payload.current_subtotal_price || 0
+            }
 
         );
 
-    order.tax =
-        Number(
+        const order =
 
-            payload.total_tax || 0
+            await OrderService.handleOrderCancelled(
 
-        );
-
-    order.shipping =
-        Number(
-
-            payload.total_shipping_price_set
-                ?.shop_money?.amount || 0
-
-        );
-
-    order.discount =
-        Number(
-
-            payload.total_discounts || 0
-
-        );
-
-    order.total =
-        Number(
-
-            payload.total_price || 0
-
-        );
-
-    order.items =
-        payload.line_items || [];
-
-    order.status =
-        payload.cancelled_at
-
-            ? "cancelled"
-
-            : "completed";
-
-    order.processedAt =
-        payload.processed_at
-
-            ? new Date(
-
-                payload.processed_at
-
-            )
-
-            : new Date();
-
-    await order.save();
-
-    return order;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Revenue Attribution
-|--------------------------------------------------------------------------
-*/
-
-export async function attributeRevenue(
-
-    shop,
-
-    order
-
-) {
-
-    const conversation =
-
-        await Conversation.findOne({
-
-            shop: shop._id,
-
-            visitor:
-
-                order.visitor,
-
-            status: "active"
-
-        }).sort({
-
-            lastMessageAt: -1
-
-        });
-
-    if (!conversation) {
-
-        return;
-
-    }
-
-    conversation.order = {
-
-        orderId: order._id,
-
-        shopifyOrderId:
-
-            order.shopifyOrderId,
-
-        orderNumber:
-
-            order.orderNumber,
-
-        subtotal:
-
-            order.subtotal,
-
-        tax:
-
-            order.tax,
-
-        shipping:
-
-            order.shipping,
-
-        discount:
-
-            order.discount,
-
-        total:
-
-            order.total,
-
-        currency:
-
-            order.currency,
-
-        purchased: true,
-
-        purchasedAt:
-
-            new Date()
-
-    };
-
-    conversation.aiRevenue.directRevenue +=
-
-        order.total;
-
-    conversation.aiRevenue.totalRevenue +=
-
-        order.total;
-
-    await conversation.save();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| AI Conversion Tracking
-|--------------------------------------------------------------------------
-*/
-
-export async function trackAIConversion(
-
-    shop,
-
-    order
-
-) {
-
-    const analytics =
-
-        await Analytics.findOne({
-
-            shop: shop._id
-
-        });
-
-    if (!analytics) {
-
-        return;
-
-    }
-
-    analytics.aiConversions += 1;
-
-    analytics.aiRevenue +=
-
-        order.total;
-
-    analytics.orders += 1;
-
-    analytics.revenue +=
-
-        order.total;
-
-    analytics.lastOrderAt =
-
-        new Date();
-
-    await analytics.save();
-
-}
-/*
-|--------------------------------------------------------------------------
-| Customer Webhook Handler
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomerWebhook(
-
-    shop,
-
-    topic,
-
-    payload
-
-) {
-
-    switch (topic) {
-
-        case "customers/create":
-
-            return handleCustomerCreate(
-
-                shop,
+                shop._id,
 
                 payload
 
             );
-
-        case "customers/update":
-
-            return handleCustomerUpdate(
-
-                shop,
-
-                payload
-
-            );
-
-        case "customers/delete":
-
-            return handleCustomerDelete(
-
-                shop,
-
-                payload
-
-            );
-
-        default:
-
-            return null;
-
-    }
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Customer Create
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomerCreate(
-
-    shop,
-
-    payload
-
-) {
-
-    const visitor = await Visitor.findOne({
-
-        shop: shop._id,
-
-        email: payload.email
-
-    });
-
-    if (visitor) {
-
-        visitor.customerId = String(payload.id);
-
-        visitor.firstName = payload.first_name || "";
-
-        visitor.lastName = payload.last_name || "";
-
-        visitor.acceptsMarketing =
-
-            payload.accepts_marketing || false;
-
-        visitor.ordersCount =
-
-            payload.orders_count || 0;
-
-        visitor.totalSpent =
-
-            Number(payload.total_spent || 0);
-
-        await visitor.save();
-    }
-
-    return {
-
-        success: true,
-
-        action: "customer_created"
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Customer Update
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomerUpdate(
-
-    shop,
-
-    payload
-
-) {
-
-    const visitor = await Visitor.findOne({
-
-        shop: shop._id,
-
-        customerId: String(payload.id)
-
-    });
-
-    if (!visitor) {
 
         return {
 
-            success: false,
+            processed: true,
 
-            message: "Visitor not found."
+            event: "order_cancelled",
+
+            order
 
         };
 
-    }
+    } catch (error) {
 
-    visitor.email = payload.email || visitor.email;
+        logger.error(
 
-    visitor.firstName = payload.first_name || "";
+            "Order cancelled webhook failed.",
 
-    visitor.lastName = payload.last_name || "";
+            {
 
-    visitor.ordersCount = payload.orders_count || 0;
+                error: error.message
 
-    visitor.totalSpent = Number(
+            }
 
-        payload.total_spent || 0
+        );
 
-    );
-
-    visitor.acceptsMarketing =
-
-        payload.accepts_marketing || false;
-
-    await visitor.save();
-
-    return {
-
-        success: true,
-
-        action: "customer_updated"
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Customer Delete
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomerDelete(
-
-    shop,
-
-    payload
-
-) {
-
-    await Visitor.updateOne(
-
-        {
-
-            shop: shop._id,
-
-            customerId: String(payload.id)
-
-        },
-
-        {
-
-            deleted: true,
-
-            deletedAt: new Date()
-
-        }
-
-    );
-
-    return {
-
-        success: true,
-
-        action: "customer_deleted"
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| App Uninstalled
-|--------------------------------------------------------------------------
-*/
-
-export async function handleAppUninstalled(
-
-    shop
-
-) {
-
-    /*
-    |--------------------------------------------------------------------------
-    | Disable Shop
-    |--------------------------------------------------------------------------
-    */
-
-    shop.installed = false;
-
-    shop.status = "uninstalled";
-
-    shop.uninstalledAt = new Date();
-
-    await shop.save();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Cancel Subscription
-    |--------------------------------------------------------------------------
-    */
-
-    await Subscription.updateMany(
-
-        {
-
-            shop: shop._id,
-
-            status: "active"
-
-        },
-
-        {
-
-            status: "cancelled",
-
-            cancelledAt: new Date()
-
-        }
-
-    );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Cleanup Conversations
-    |--------------------------------------------------------------------------
-    */
-
-    await Conversation.updateMany(
-
-        {
-
-            shop: shop._id
-
-        },
-
-        {
-
-            archived: true
-
-        }
-
-    );
-
-    return {
-
-        success: true,
-
-        action: "app_uninstalled"
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| GDPR Customer Redact
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomerRedact(
-
-    payload
-
-) {
-
-    await Visitor.updateMany(
-
-        {
-
-            customerId: String(payload.customer.id)
-
-        },
-
-        {
-
-            email: "",
-
-            firstName: "",
-
-            lastName: "",
-
-            phone: "",
-
-            customerNotes: "",
-
-            deleted: true
-
-        }
-
-    );
-
-    return {
-
-        success: true
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| GDPR Shop Redact
-|--------------------------------------------------------------------------
-*/
-
-export async function handleShopRedact(
-
-    shop
-
-) {
-
-    await Conversation.deleteMany({
-
-        shop: shop._id
-
-    });
-
-    await Message.deleteMany({
-
-        shop: shop._id
-
-    });
-
-    await Visitor.deleteMany({
-
-        shop: shop._id
-
-    });
-
-    return {
-
-        success: true
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| GDPR Customers Data Request
-|--------------------------------------------------------------------------
-*/
-
-export async function handleCustomersDataRequest(
-
-    payload
-
-) {
-
-    const visitor = await Visitor.findOne({
-
-        customerId: String(
-
-            payload.customer.id
-
-        )
-
-    });
-
-    return {
-
-        success: true,
-
-        customer: visitor
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Shop Cleanup
-|--------------------------------------------------------------------------
-*/
-
-export async function cleanupShopData(
-
-    shopId
-
-) {
-
-    await Conversation.deleteMany({
-
-        shop: shopId
-
-    });
-
-    await Message.deleteMany({
-
-        shop: shopId
-
-    });
-
-    await Visitor.deleteMany({
-
-        shop: shopId
-
-    });
-
-    await Analytics.deleteMany({
-
-        shop: shopId
-
-    });
-
-    return true;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Conversation Cleanup
-|--------------------------------------------------------------------------
-*/
-
-export async function cleanupConversation(
-
-    conversationId
-
-) {
-
-    await Message.deleteMany({
-
-        conversation: conversationId
-
-    });
-
-    await Conversation.deleteOne({
-
-        _id: conversationId
-
-    });
-
-    return true;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Subscription Updates
-|--------------------------------------------------------------------------
-*/
-
-export async function updateSubscriptionStatus(
-
-    shop,
-
-    status
-
-) {
-
-    const subscription =
-
-        await Subscription.findOne({
-
-            shop: shop._id
-
-        });
-
-    if (!subscription) {
-
-        return null;
+        throw error;
 
     }
 
-    subscription.status = status;
+}
 
-    subscription.updatedAt = new Date();
 
-    await subscription.save();
+/*
+|--------------------------------------------------------------------------
+| Handle Order Paid
+|--------------------------------------------------------------------------
+*/
 
-    return subscription;
+export async function handleOrderPaid(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+        logger.info(
+
+            "Processing order paid webhook.",
+
+            {
+
+                shop: shop.shopDomain,
+
+                orderId: payload?.id
+
+            }
+
+        );
+
+        const order =
+
+            await OrderService.handleOrderPaid(
+
+                shop._id,
+
+                payload
+
+            );
+
+        return {
+
+            processed: true,
+
+            event: "order_paid",
+
+            order
+
+        };
+
+    } catch (error) {
+
+        logger.error(
+
+            "Order paid webhook failed.",
+
+            {
+
+                error: error.message
+
+            }
+
+        );
+
+        throw error;
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Handle Order Deleted
+|--------------------------------------------------------------------------
+*/
+
+export async function handleOrderDeleted(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+        logger.info(
+
+            "Processing order deleted webhook.",
+
+            {
+
+                shop: shop.shopDomain,
+
+                orderId: payload?.id
+
+            }
+
+        );
+
+        const result =
+
+            await OrderService.handleOrderDeleted(
+
+                shop._id,
+
+                payload
+
+            );
+
+        return {
+
+            processed: true,
+
+            event: "order_deleted",
+
+            result
+
+        };
+
+    } catch (error) {
+
+        logger.error(
+
+            "Order deleted webhook failed.",
+
+            {
+
+                error: error.message
+
+            }
+
+        );
+
+        throw error;
+
+    }
 
             }
 /*
 |--------------------------------------------------------------------------
-| Webhook Service
-|--------------------------------------------------------------------------
-|
-| Central service object exposing all webhook handlers and helpers.
+| Handle Product Created Webhook
 |--------------------------------------------------------------------------
 */
 
-export const WebhookService = {
+export async function handleProductCreated(
 
-    /*
-    |--------------------------------------------------------------------------
-    | Verification
-    |--------------------------------------------------------------------------
-    */
+    context
 
-    verifyWebhook,
+) {
 
-    processWebhook,
+    try {
 
-    parseWebhookPayload,
+        const {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Product Webhooks
-    |--------------------------------------------------------------------------
-    */
+            shop,
 
-    handleProductWebhook,
+            payload
 
-    handleProductCreate,
+        } = context;
 
-    handleProductUpdate,
 
-    handleProductDelete,
+        logger.info(
 
-    syncProduct,
+            "Processing product created webhook.",
 
-    updateInventory,
+            {
 
-    /*
-    |--------------------------------------------------------------------------
-    | Order Webhooks
-    |--------------------------------------------------------------------------
-    */
+                shop:
 
-    handleOrderWebhook,
+                    shop.shopDomain,
 
-    handleOrderCreate,
+                productId:
 
-    handleOrderUpdate,
+                    payload?.id
 
-    handleOrderCancel,
+            }
 
-    handleOrderFulfilled,
+        );
 
-    syncOrder,
 
-    /*
-    |--------------------------------------------------------------------------
-    | Customer Webhooks
-    |--------------------------------------------------------------------------
-    */
+        const product =
 
-    handleCustomerWebhook,
+            await ProductService.handleProductCreated(
 
-    handleCustomerCreate,
+                shop._id,
 
-    handleCustomerUpdate,
+                payload
 
-    handleCustomerDelete,
+            );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Shop Webhooks
-    |--------------------------------------------------------------------------
-    */
 
-    handleAppUninstalled,
+        return {
 
-    handleShopUpdate,
+            processed: true,
 
-    /*
-    |--------------------------------------------------------------------------
-    | Utilities
-    |--------------------------------------------------------------------------
-    */
+            event: "product_created",
 
-    logWebhook,
+            product
 
-    updateWebhookStatus
+        };
 
-};
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Product created webhook failed.",
+
+            {
+
+                error:
+
+                    error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
+
 
 /*
 |--------------------------------------------------------------------------
-| Helper Exports
+| Handle Product Updated Webhook
 |--------------------------------------------------------------------------
 */
 
-export {
+export async function handleProductUpdated(
 
-    verifyWebhook,
+    context
 
-    processWebhook,
+) {
 
-    parseWebhookPayload,
+    try {
 
-    handleProductWebhook,
 
-    handleProductCreate,
+        const {
 
-    handleProductUpdate,
+            shop,
 
-    handleProductDelete,
+            payload
 
-    syncProduct,
+        } = context;
 
-    updateInventory,
 
-    handleOrderWebhook,
 
-    handleOrderCreate,
+        logger.info(
 
-    handleOrderUpdate,
+            "Processing product updated webhook.",
 
-    handleOrderCancel,
+            {
 
-    handleOrderFulfilled,
+                shop:
 
-    syncOrder,
+                    shop.shopDomain,
 
-    handleCustomerWebhook,
+                productId:
 
-    handleCustomerCreate,
+                    payload?.id
 
-    handleCustomerUpdate,
+            }
 
-    handleCustomerDelete,
+        );
 
-    handleAppUninstalled,
 
-    handleShopUpdate,
 
-    logWebhook,
+        const product =
 
-    updateWebhookStatus
+            await ProductService.handleProductUpdated(
 
-};
+                shop._id,
+
+                payload
+
+            );
+
+
+
+        return {
+
+            processed: true,
+
+            event: "product_updated",
+
+            product
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Product updated webhook failed.",
+
+            {
+
+                error:
+
+                    error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
+
 
 /*
 |--------------------------------------------------------------------------
-| Default Export
+| Handle Product Deleted Webhook
 |--------------------------------------------------------------------------
 */
 
-export default WebhookService;
+export async function handleProductDeleted(
+
+    context
+
+) {
+
+    try {
+
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+
+
+        logger.info(
+
+            "Processing product deleted webhook.",
+
+            {
+
+                shop:
+
+                    shop.shopDomain,
+
+                productId:
+
+                    payload?.id
+
+            }
+
+        );
+
+
+
+        const result =
+
+            await ProductService.handleProductDeleted(
+
+                shop._id,
+
+                payload
+
+            );
+
+
+
+        return {
+
+            processed: true,
+
+            event: "product_deleted",
+
+            result
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Product deleted webhook failed.",
+
+            {
+
+                error:
+
+                    error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
