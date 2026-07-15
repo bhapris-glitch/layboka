@@ -967,3 +967,50 @@ export async function statistics(
     }
 
 }
+/*
+|--------------------------------------------------------------------------
+| Product Controller
+|--------------------------------------------------------------------------
+*/
+
+export const ProductController = {
+
+    create,
+
+    update,
+
+    remove,
+
+    archive,
+
+    getOne,
+
+    getAll,
+
+    search,
+
+    getFeatured,
+
+    getRelated,
+
+    syncProduct,
+
+    syncAllProducts,
+
+    updateInventory,
+
+    updatePrice,
+
+    analytics,
+
+    statistics
+
+};
+
+/*
+|--------------------------------------------------------------------------
+| Default Export
+|--------------------------------------------------------------------------
+*/
+
+export default ProductController;
