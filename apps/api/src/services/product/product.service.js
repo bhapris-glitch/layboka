@@ -1220,7 +1220,11 @@ export const ProductService = {
 
     archiveProduct,
 
-    deleteProduct
+    deleteProduct,
+
+    getProductAnalytics,
+
+    getProductStatistics
 
 };
 
