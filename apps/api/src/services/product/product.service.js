@@ -1,48 +1,283 @@
 // layboka/apps/api/src/services/product/product.service.js
-import Product from "../../models/Product.js";
-import Shop from "../../models/Shop.js";
-
 /*
 |--------------------------------------------------------------------------
-| Product Service Configuration
+| Imports
 |--------------------------------------------------------------------------
 */
 
-export const PRODUCT_CONFIG = Object.freeze({
+import mongoose from "mongoose";
+
+import Product from "../../models/Product.js";
+import Shop from "../../models/Shop.js";
+import Conversation from "../../models/Conversation.js";
+
+import {
+
+    getShop,
+
+    shopifyGraphQL
+
+} from "../shopify/shopify.service.js";
+
+/*
+|--------------------------------------------------------------------------
+| Configuration
+|--------------------------------------------------------------------------
+*/
+
+const PRODUCT_CONFIG = {
 
     DEFAULT_LIMIT: 20,
 
-    MAX_LIMIT: 100,
+    MAX_LIMIT: 250,
 
-    LOW_STOCK_THRESHOLD: 10,
+    DEFAULT_CURRENCY: "USD",
 
-    CACHE_TTL: 300,
+    DEFAULT_STATUS: "active",
 
-    SEARCH_FIELDS: [
+    DEFAULT_SCORE: 0,
 
-        "title",
+    CACHE_TTL: 60 * 5
 
-        "description",
-
-        "vendor",
-
-        "productType",
-
-        "tags"
-
-    ]
-
-});
+};
 
 /*
 |--------------------------------------------------------------------------
-| Create Product
+| Map Shopify Product
 |--------------------------------------------------------------------------
 */
 
-export async function createProduct(data) {
+export function mapShopifyProduct(
 
-    const product = await Product.create(data);
+    shop,
+
+    shopifyProduct
+
+) {
+
+    if (!shopifyProduct) {
+
+        return null;
+
+    }
+
+    const firstVariant =
+
+        shopifyProduct.variants?.edges?.[0]?.node ||
+
+        shopifyProduct.variants?.[0] ||
+
+        {};
+
+    const firstImage =
+
+        shopifyProduct.images?.edges?.[0]?.node ||
+
+        shopifyProduct.images?.[0] ||
+
+        {};
+
+    return {
+
+        shop: shop._id || shop,
+
+        shopifyProductId: String(
+
+            shopifyProduct.id || ""
+
+        ),
+
+        title:
+
+            shopifyProduct.title || "",
+
+        handle:
+
+            shopifyProduct.handle || "",
+
+        description:
+
+            shopifyProduct.description ||
+
+            shopifyProduct.descriptionHtml ||
+
+            "",
+
+        vendor:
+
+            shopifyProduct.vendor || "",
+
+        productType:
+
+            shopifyProduct.productType || "",
+
+        status:
+
+            shopifyProduct.status ||
+
+            PRODUCT_CONFIG.DEFAULT_STATUS,
+
+        tags:
+
+            Array.isArray(
+
+                shopifyProduct.tags
+
+            )
+
+                ? shopifyProduct.tags
+
+                : [],
+
+        image:
+
+            firstImage.url ||
+
+            firstImage.src ||
+
+            "",
+
+        images:
+
+            shopifyProduct.images?.edges?.map(
+
+                ({ node }) => node.url
+
+            ) ||
+
+            [],
+
+        variantId:
+
+            String(
+
+                firstVariant.id || ""
+
+            ),
+
+        sku:
+
+            firstVariant.sku || "",
+
+        barcode:
+
+            firstVariant.barcode || "",
+
+        inventoryQuantity:
+
+            Number(
+
+                firstVariant.inventoryQuantity || 0
+
+            ),
+
+        inventoryPolicy:
+
+            firstVariant.inventoryPolicy ||
+
+            "DENY",
+
+        price:
+
+            Number(
+
+                firstVariant.price || 0
+
+            ),
+
+        compareAtPrice:
+
+            Number(
+
+                firstVariant.compareAtPrice || 0
+
+            ),
+
+        currency:
+
+            PRODUCT_CONFIG.DEFAULT_CURRENCY,
+
+        availableForSale:
+
+            Boolean(
+
+                shopifyProduct.availableForSale
+
+            ),
+
+        publishedAt:
+
+            shopifyProduct.publishedAt ||
+
+            null,
+
+        updatedAt:
+
+            shopifyProduct.updatedAt ||
+
+            new Date()
+
+    };
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Get Product
+|--------------------------------------------------------------------------
+*/
+
+export async function getProduct(
+
+    productId
+
+) {
+
+    if (
+
+        !mongoose.Types.ObjectId.isValid(
+
+            productId
+
+        )
+
+    ) {
+
+        throw new Error(
+
+            "Invalid product id."
+
+        );
+
+    }
+
+    const product =
+
+        await Product.findById(
+
+            productId
+
+        )
+
+        .populate(
+
+            "shop",
+
+            "name shop"
+
+        )
+
+        .lean();
+
+    if (!product) {
+
+        throw new Error(
+
+            "Product not found."
+
+        );
+
+    }
 
     return product;
 
@@ -50,103 +285,15 @@ export async function createProduct(data) {
 
 /*
 |--------------------------------------------------------------------------
-| Update Product
-|--------------------------------------------------------------------------
-*/
-
-export async function updateProduct(
-
-    productId,
-
-    data
-
-) {
-
-    return Product.findByIdAndUpdate(
-
-        productId,
-
-        data,
-
-        {
-
-            new: true,
-
-            runValidators: true
-
-        }
-
-    );
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Delete Product (Soft Delete)
-|--------------------------------------------------------------------------
-*/
-
-export async function deleteProduct(
-
-    productId
-
-) {
-
-    return Product.findByIdAndUpdate(
-
-        productId,
-
-        {
-
-            deleted: true,
-
-            deletedAt: new Date()
-
-        },
-
-        {
-
-            new: true
-
-        }
-
-    );
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Find Product By ID
-|--------------------------------------------------------------------------
-*/
-
-export async function getProductById(
-
-    productId
-
-) {
-
-    return Product.findOne({
-
-        _id: productId,
-
-        deleted: false
-
-    });
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Find Shopify Product
+| Get Product By Shopify ID
 |--------------------------------------------------------------------------
 */
 
 export async function getProductByShopifyId(
 
-    shopifyProductId,
+    shopId,
 
-    shopId
+    shopifyProductId
 
 ) {
 
@@ -154,348 +301,228 @@ export async function getProductByShopifyId(
 
         shop: shopId,
 
-        shopifyProductId,
+        shopifyProductId: String(
+
+            shopifyProductId
+
+        ),
 
         deleted: false
 
     });
 
 }
-
 /*
 |--------------------------------------------------------------------------
-| Get Shop Products
+| Get Products
 |--------------------------------------------------------------------------
 */
 
-export async function getShopProducts(
+export async function getProducts(
 
     shopId,
 
-    limit = PRODUCT_CONFIG.DEFAULT_LIMIT,
+    {
 
-    page = 1
+        page = 1,
+
+        limit = PRODUCT_CONFIG.DEFAULT_LIMIT,
+
+        status,
+
+        vendor,
+
+        productType,
+
+        search
+
+    } = {}
 
 ) {
 
+    limit = Math.min(
+
+        Number(limit),
+
+        PRODUCT_CONFIG.MAX_LIMIT
+
+    );
+
     const skip =
 
-        (page - 1) * limit;
+        (Number(page) - 1) * limit;
 
-    return Product.find({
+    const query = {
 
         shop: shopId,
 
         deleted: false
 
-    })
+    };
 
-    .sort({
+    if (status) {
 
-        createdAt: -1
+        query.status = status;
 
-    })
+    }
 
-    .skip(skip)
+    if (vendor) {
 
-    .limit(limit);
+        query.vendor = vendor;
+
+    }
+
+    if (productType) {
+
+        query.productType = productType;
+
+    }
+
+    if (search) {
+
+        query.$text = {
+
+            $search: search
+
+        };
+
+    }
+
+    const [
+
+        products,
+
+        total
+
+    ] = await Promise.all([
+
+        Product.find(query)
+
+            .sort({
+
+                updatedAt: -1
+
+            })
+
+            .skip(skip)
+
+            .limit(limit)
+
+            .lean(),
+
+        Product.countDocuments(query)
+
+    ]);
+
+    return {
+
+        products,
+
+        pagination: {
+
+            page: Number(page),
+
+            limit,
+
+            total,
+
+            pages: Math.ceil(
+
+                total / limit
+
+            )
+
+        }
+
+    };
 
 }
+
 /*
 |--------------------------------------------------------------------------
 | Search Products
 |--------------------------------------------------------------------------
 */
 
-export async function searchProducts({
+export async function searchProducts(
 
-    shop,
+    shopId,
 
-    keyword = "",
+    keyword,
 
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
+    limit = 20
 
-}) {
+) {
 
-    const query = {
+    return Product.find({
 
-        shop,
+        shop: shopId,
 
-        status: "active",
+        deleted: false,
 
-        deleted: false
-
-    };
-
-    if (keyword.trim()) {
-
-        query.$or = [
+        $or: [
 
             {
+
                 title: {
+
                     $regex: keyword,
+
                     $options: "i"
+
                 }
+
             },
 
             {
-                description: {
+
+                handle: {
+
                     $regex: keyword,
+
                     $options: "i"
+
                 }
+
             },
 
             {
+
                 vendor: {
+
                     $regex: keyword,
+
                     $options: "i"
+
                 }
+
             },
 
             {
-                productType: {
+
+                sku: {
+
                     $regex: keyword,
+
                     $options: "i"
+
                 }
+
             },
 
             {
+
                 tags: {
-                    $elemMatch: {
-                        $regex: keyword,
-                        $options: "i"
-                    }
+
+                    $regex: keyword,
+
+                    $options: "i"
+
                 }
+
             }
 
-        ];
-
-    }
-
-    return Product.find(query)
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Filter By Category
-|--------------------------------------------------------------------------
-*/
-
-export async function getProductsByCategory(
-
-    shop,
-
-    category,
-
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        productType: category,
-
-        status: "active",
-
-        deleted: false
-
-    })
-
-    .sort({ title: 1 })
-
-    .limit(limit)
-
-    .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Filter By Vendor
-|--------------------------------------------------------------------------
-*/
-
-export async function getProductsByVendor(
-
-    shop,
-
-    vendor,
-
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        vendor,
-
-        status: "active",
-
-        deleted: false
-
-    })
-
-    .sort({ title: 1 })
-
-    .limit(limit)
-
-    .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Filter By Price
-|--------------------------------------------------------------------------
-*/
-
-export async function getProductsByPrice(
-
-    shop,
-
-    minPrice = 0,
-
-    maxPrice = Number.MAX_SAFE_INTEGER,
-
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        status: "active",
-
-        deleted: false,
-
-        price: {
-
-            $gte: minPrice,
-
-            $lte: maxPrice
-
-        }
-
-    })
-
-    .sort({ price: 1 })
-
-    .limit(limit)
-
-    .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Inventory Filter
-|--------------------------------------------------------------------------
-*/
-
-export async function getInStockProducts(
-
-    shop,
-
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        status: "active",
-
-        deleted: false,
-
-        inventoryQuantity: {
-
-            $gt: 0
-
-        }
-
-    })
-
-    .sort({
-
-        inventoryQuantity: -1
-
-    })
-
-    .limit(limit)
-
-    .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Featured Products
-|--------------------------------------------------------------------------
-*/
-
-export async function getFeaturedProducts(
-
-    shop,
-
-    limit = PRODUCT_LIMITS.DEFAULT_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        featured: true,
-
-        status: "active",
-
-        deleted: false
-
-    })
-
-    .sort({
-
-        totalSales: -1
-
-    })
-
-    .limit(limit)
-
-    .lean();
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Active Products
-|--------------------------------------------------------------------------
-*/
-
-export async function getActiveProducts(
-
-    shop,
-
-    limit = PRODUCT_LIMITS.MAX_LIMIT
-
-) {
-
-    return Product.find({
-
-        shop,
-
-        status: "active",
-
-        deleted: false
+        ]
 
     })
 
@@ -513,591 +540,645 @@ export async function getActiveProducts(
 
 /*
 |--------------------------------------------------------------------------
-| Product Statistics
+| Get Featured Products
 |--------------------------------------------------------------------------
 */
 
-export async function getProductStatistics(shop) {
+export async function getFeaturedProducts(
 
-    const [
+    shopId,
 
-        total,
-
-        active,
-
-        featured,
-
-        outOfStock
-
-    ] = await Promise.all([
-
-        Product.countDocuments({
-
-            shop,
-
-            deleted: false
-
-        }),
-
-        Product.countDocuments({
-
-            shop,
-
-            status: "active",
-
-            deleted: false
-
-        }),
-
-        Product.countDocuments({
-
-            shop,
-
-            featured: true,
-
-            status: "active",
-
-            deleted: false
-
-        }),
-
-        Product.countDocuments({
-
-            shop,
-
-            status: "active",
-
-            deleted: false,
-
-            inventoryQuantity: {
-
-                $lte: 0
-
-            }
-
-        })
-
-    ]);
-
-    return {
-
-        total,
-
-        active,
-
-        featured,
-
-        outOfStock
-
-    };
-
-}
-/*
-|--------------------------------------------------------------------------
-| Sync Shopify Products
-|--------------------------------------------------------------------------
-*/
-
-export async function syncShopifyProducts(
-
-    shop,
-
-    shopifyProducts = []
+    limit = 8
 
 ) {
 
-    const results = {
+    return Product.find({
 
-        created: 0,
+        shop: shopId,
 
-        updated: 0,
+        deleted: false,
 
-        failed: 0
+        status: "active"
 
-    };
+    })
 
-    for (const item of shopifyProducts) {
+    .sort({
 
-        try {
+        recommendationScore: -1,
 
-            const existing = await Product.findOne({
+        salesCount: -1,
 
-                shop,
+        updatedAt: -1
 
-                shopifyProductId: String(item.id)
+    })
 
-            });
+    .limit(limit)
 
-            const data = {
-
-                shop,
-
-                shopifyProductId: String(item.id),
-
-                title: item.title,
-
-                description: item.body_html || "",
-
-                handle: item.handle,
-
-                vendor: item.vendor || "",
-
-                productType: item.product_type || "",
-
-                status: item.status || "active",
-
-                tags: item.tags
-                    ? item.tags.split(",").map(tag => tag.trim())
-                    : [],
-
-                featuredImage:
-                    item.image?.src || "",
-
-                images:
-                    item.images?.map(img => img.src) || [],
-
-                price: Number(
-
-                    item.variants?.[0]?.price || 0
-
-                ),
-
-                compareAtPrice: Number(
-
-                    item.variants?.[0]?.compare_at_price || 0
-
-                ),
-
-                inventoryQuantity: Number(
-
-                    item.variants?.[0]?.inventory_quantity || 0
-
-                )
-
-            };
-
-            if (existing) {
-
-                await Product.updateOne(
-
-                    { _id: existing._id },
-
-                    data
-
-                );
-
-                results.updated++;
-
-            } else {
-
-                await Product.create(data);
-
-                results.created++;
-
-            }
-
-        } catch {
-
-            results.failed++;
-
-        }
-
-    }
-
-    return results;
+    .lean();
 
 }
 
 /*
 |--------------------------------------------------------------------------
-| Bulk Import Products
+| Get Related Products
 |--------------------------------------------------------------------------
 */
 
-export async function bulkImportProducts(
+export async function getRelatedProducts(
 
-    products = []
+    productId,
+
+    limit = 6
 
 ) {
 
-    if (!products.length) {
+    const product =
+
+        await Product.findById(
+
+            productId
+
+        );
+
+    if (!product) {
 
         return [];
 
     }
 
-    return Product.insertMany(
+    return Product.find({
 
-        products,
+        _id: {
 
-        {
+            $ne: product._id
 
-            ordered: false
+        },
 
-        }
+        shop: product.shop,
 
-    );
+        deleted: false,
 
-}
+        status: "active",
 
-/*
-|--------------------------------------------------------------------------
-| Bulk Update Products
-|--------------------------------------------------------------------------
-*/
+        $or: [
 
-export async function bulkUpdateProducts(
+            {
 
-    updates = []
+                productType:
 
-) {
-
-    if (!updates.length) {
-
-        return {
-
-            modifiedCount: 0
-
-        };
-
-    }
-
-    const operations = updates.map(item => ({
-
-        updateOne: {
-
-            filter: {
-
-                _id: item._id
+                    product.productType
 
             },
 
-            update: {
+            {
 
-                $set: item.data
+                vendor:
+
+                    product.vendor
+
+            },
+
+            {
+
+                tags: {
+
+                    $in:
+
+                        product.tags || []
+
+                }
 
             }
 
-        }
+        ]
 
-    }));
+    })
 
-    return Product.bulkWrite(
+    .sort({
 
-        operations
+        recommendationScore: -1,
+
+        salesCount: -1
+
+    })
+
+    .limit(limit)
+
+    .lean();
+
+}
+/*
+|--------------------------------------------------------------------------
+| Sync Single Shopify Product
+|--------------------------------------------------------------------------
+*/
+
+export async function syncShopifyProduct(
+
+    shopId,
+
+    shopifyProduct
+
+) {
+
+    const shop = await getShop(shopId);
+
+    if (!shop) {
+
+        throw new Error(
+
+            "Shop not found."
+
+        );
+
+    }
+
+    const productData = mapShopifyProduct(
+
+        shop,
+
+        shopifyProduct
 
     );
+
+    let product = await getProductByShopifyId(
+
+        shop._id,
+
+        productData.shopifyProductId
+
+    );
+
+    if (product) {
+
+        Object.assign(
+
+            product,
+
+            productData
+
+        );
+
+        product.lastSyncedAt =
+
+            new Date();
+
+        await product.save();
+
+        return product;
+
+    }
+
+    product = await Product.create({
+
+        ...productData,
+
+        lastSyncedAt: new Date()
+
+    });
+
+    return product;
 
 }
 
 /*
 |--------------------------------------------------------------------------
-| Product Cache
+| Sync All Shopify Products
 |--------------------------------------------------------------------------
 */
 
-const productCache = new Map();
+export async function syncAllProducts(
 
-export function cacheProduct(
-
-    product
+    shopId
 
 ) {
 
-    if (!product) {
+    const shop = await getShop(
 
-        return;
+        shopId
+
+    );
+
+    if (!shop) {
+
+        throw new Error(
+
+            "Shop not found."
+
+        );
 
     }
 
-    productCache.set(
+    const query = `
 
-        String(product._id),
+    query Products($first:Int!) {
+
+      products(first:$first) {
+
+        edges {
+
+          node {
+
+            id
+
+            title
+
+            handle
+
+            description
+
+            vendor
+
+            productType
+
+            status
+
+            tags
+
+            availableForSale
+
+            publishedAt
+
+            updatedAt
+
+            images(first:5) {
+
+              edges {
+
+                node {
+
+                  url
+
+                }
+
+              }
+
+            }
+
+            variants(first:20) {
+
+              edges {
+
+                node {
+
+                  id
+
+                  sku
+
+                  barcode
+
+                  inventoryQuantity
+
+                  inventoryPolicy
+
+                  price
+
+                  compareAtPrice
+
+                }
+
+              }
+
+            }
+
+          }
+
+        }
+
+      }
+
+    }
+
+    `;
+
+    const data = await shopifyGraphQL(
+
+        shop.session,
+
+        query,
 
         {
 
-            data: product,
+            first:
 
-            cachedAt: Date.now()
+                PRODUCT_CONFIG.MAX_LIMIT
 
         }
 
     );
 
+    const products =
+
+        data.products?.edges || [];
+
+    const syncedProducts = [];
+
+    for (const item of products) {
+
+        const synced =
+
+            await syncShopifyProduct(
+
+                shopId,
+
+                item.node
+
+            );
+
+        syncedProducts.push(
+
+            synced
+
+        );
+
+    }
+
+    return {
+
+        success: true,
+
+        synced:
+
+            syncedProducts.length,
+
+        products:
+
+            syncedProducts
+
+    };
+
 }
 
-export function getCachedProduct(
+/*
+|--------------------------------------------------------------------------
+| Update Inventory
+|--------------------------------------------------------------------------
+*/
+
+export async function updateInventory(
+
+    productId,
+
+    inventoryQuantity
+
+) {
+
+    const product = await Product.findById(
+
+        productId
+
+    );
+
+    if (!product) {
+
+        throw new Error(
+
+            "Product not found."
+
+        );
+
+    }
+
+    product.inventoryQuantity =
+
+        Number(
+
+            inventoryQuantity
+
+        );
+
+    product.lastSyncedAt =
+
+        new Date();
+
+    await product.save();
+
+    return product;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Update Product Price
+|--------------------------------------------------------------------------
+*/
+
+export async function updatePrice(
+
+    productId,
+
+    {
+
+        price,
+
+        compareAtPrice
+
+    }
+
+) {
+
+    const product = await Product.findById(
+
+        productId
+
+    );
+
+    if (!product) {
+
+        throw new Error(
+
+            "Product not found."
+
+        );
+
+    }
+
+    if (
+
+        price !== undefined
+
+    ) {
+
+        product.price =
+
+            Number(price);
+
+    }
+
+    if (
+
+        compareAtPrice !== undefined
+
+    ) {
+
+        product.compareAtPrice =
+
+            Number(compareAtPrice);
+
+    }
+
+    product.lastSyncedAt =
+
+        new Date();
+
+    await product.save();
+
+    return product;
+
+}
+/*
+|--------------------------------------------------------------------------
+| Create Product
+|--------------------------------------------------------------------------
+*/
+
+export async function createProduct(
+
+    productData
+
+) {
+
+    const product = await Product.create({
+
+        ...productData,
+
+        lastSyncedAt: new Date()
+
+    });
+
+    return product;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Update Product
+|--------------------------------------------------------------------------
+*/
+
+export async function updateProduct(
+
+    productId,
+
+    updateData
+
+) {
+
+    const product = await Product.findById(
+
+        productId
+
+    );
+
+    if (!product) {
+
+        throw new Error(
+
+            "Product not found."
+
+        );
+
+    }
+
+    Object.assign(
+
+        product,
+
+        updateData
+
+    );
+
+    product.lastSyncedAt =
+
+        new Date();
+
+    await product.save();
+
+    return product;
+
+}
+
+/*
+|--------------------------------------------------------------------------
+| Archive Product
+|--------------------------------------------------------------------------
+*/
+
+export async function archiveProduct(
 
     productId
 
 ) {
 
-    const cached = productCache.get(
+    const product = await Product.findById(
 
-        String(productId)
+        productId
 
     );
 
-    if (!cached) {
+    if (!product) {
 
-        return null;
+        throw new Error(
+
+            "Product not found."
+
+        );
 
     }
 
-    return cached.data;
+    product.archived = true;
 
-}
+    product.archivedAt =
 
-export function clearProductCache() {
+        new Date();
 
-    productCache.clear();
+    await product.save();
+
+    return product;
 
 }
 
 /*
 |--------------------------------------------------------------------------
-| Search Optimization
+| Delete Product (Soft Delete)
 |--------------------------------------------------------------------------
 */
 
-export function normalizeSearchQuery(
+export async function deleteProduct(
 
-    query = ""
-
-) {
-
-    return query
-
-        .toLowerCase()
-
-        .trim()
-
-        .replace(/\s+/g, " ");
-
-}
-
-export function buildSearchRegex(
-
-    keyword = ""
+    productId
 
 ) {
 
-    return new RegExp(
+    const product = await Product.findById(
 
-        normalizeSearchQuery(keyword),
-
-        "i"
+        productId
 
     );
 
-}
+    if (!product) {
 
-export function scoreProductMatch(
+        throw new Error(
 
-    product,
+            "Product not found."
 
-    keyword
-
-) {
-
-    let score = 0;
-
-    const search = normalizeSearchQuery(keyword);
-
-    if (
-
-        product.title?.toLowerCase().includes(search)
-
-    ) {
-
-        score += 50;
+        );
 
     }
 
-    if (
+    product.deleted = true;
 
-        product.vendor?.toLowerCase().includes(search)
+    product.deletedAt =
 
-    ) {
+        new Date();
 
-        score += 20;
-
-    }
-
-    if (
-
-        product.productType?.toLowerCase().includes(search)
-
-    ) {
-
-        score += 15;
-
-    }
-
-    if (
-
-        product.tags?.some(tag =>
-
-            tag.toLowerCase().includes(search)
-
-        )
-
-    ) {
-
-        score += 15;
-
-    }
-
-    return score;
-
-                }
-/*
-|--------------------------------------------------------------------------
-| Product Analytics
-|--------------------------------------------------------------------------
-*/
-
-export async function getProductAnalytics(shop) {
-
-    const [
-        totalProducts,
-        activeProducts,
-        featuredProducts,
-        outOfStockProducts,
-        totalInventory,
-        totalValue,
-        averagePrice,
-        topSellingProducts,
-        recentlyAddedProducts
-    ] = await Promise.all([
-
-        Product.countDocuments({
-            shop,
-            deleted: false
-        }),
-
-        Product.countDocuments({
-            shop,
-            status: "active",
-            deleted: false
-        }),
-
-        Product.countDocuments({
-            shop,
-            featured: true,
-            status: "active",
-            deleted: false
-        }),
-
-        Product.countDocuments({
-            shop,
-            status: "active",
-            deleted: false,
-            inventoryQuantity: { $lte: 0 }
-        }),
-
-        Product.aggregate([
-            {
-                $match: {
-                    shop,
-                    deleted: false
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    totalInventory: {
-                        $sum: "$inventoryQuantity"
-                    }
-                }
-            }
-        ]),
-
-        Product.aggregate([
-            {
-                $match: {
-                    shop,
-                    deleted: false
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    inventoryValue: {
-                        $sum: {
-                            $multiply: [
-                                "$price",
-                                "$inventoryQuantity"
-                            ]
-                        }
-                    }
-                }
-            }
-        ]),
-
-        Product.aggregate([
-            {
-                $match: {
-                    shop,
-                    status: "active",
-                    deleted: false
-                }
-            },
-            {
-                $group: {
-                    _id: null,
-                    averagePrice: {
-                        $avg: "$price"
-                    }
-                }
-            }
-        ]),
-
-        Product.find({
-            shop,
-            status: "active",
-            deleted: false
-        })
-        .sort({
-            totalSales: -1
-        })
-        .limit(10)
-        .lean(),
-
-        Product.find({
-            shop,
-            deleted: false
-        })
-        .sort({
-            createdAt: -1
-        })
-        .limit(10)
-        .lean()
-
-    ]);
+    await product.save();
 
     return {
 
-        totalProducts,
+        success: true,
 
-        activeProducts,
-
-        featuredProducts,
-
-        outOfStockProducts,
-
-        totalInventory:
-            totalInventory[0]?.totalInventory || 0,
-
-        inventoryValue:
-            totalValue[0]?.inventoryValue || 0,
-
-        averagePrice:
-            averagePrice[0]?.averagePrice || 0,
-
-        topSellingProducts,
-
-        recentlyAddedProducts
+        message: "Product deleted successfully."
 
     };
 
@@ -1111,43 +1192,35 @@ export async function getProductAnalytics(shop) {
 
 export const ProductService = {
 
+    mapShopifyProduct,
+
+    getProduct,
+
+    getProductByShopifyId,
+
+    getProducts,
+
+    searchProducts,
+
+    getFeaturedProducts,
+
+    getRelatedProducts,
+
+    syncShopifyProduct,
+
+    syncAllProducts,
+
+    updateInventory,
+
+    updatePrice,
+
     createProduct,
 
     updateProduct,
 
-    deleteProduct,
+    archiveProduct,
 
-    getProductById,
-
-    getProductByShopifyId,
-
-    searchProducts,
-
-    getProductsByCategory,
-
-    getProductsByVendor,
-
-    getProductsByPrice,
-
-    getInStockProducts,
-
-    getFeaturedProducts,
-
-    getActiveProducts,
-
-    getProductStatistics,
-
-    syncShopifyProducts,
-
-    bulkImportProducts,
-
-    bulkUpdateProducts,
-
-    rebuildProductCache,
-
-    optimizeProductSearch,
-
-    getProductAnalytics
+    deleteProduct
 
 };
 
