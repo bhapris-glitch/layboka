@@ -71,33 +71,13 @@ export async function getShopByDomain(domain) {
 | Create REST Client
 |--------------------------------------------------------------------------
 */
-
 export async function getRestClient(shopId) {
 
-export function getAdminClient(session) {
-
-    if (!session) {
-
-        throw new Error("Shopify session is required.");
-
-    }
-
-    return new shopify.clients.Graphql({
-
-        session
-
-    });
-
-}
-    
-    const shop =
-        await getShop(shopId);
+    const shop = await getShop(shopId);
 
     if (!shop) {
 
-        throw new Error(
-            "Shop not found."
-        );
+        throw new Error("Shop not found.");
 
     }
 
@@ -107,14 +87,14 @@ export function getAdminClient(session) {
 
             shop: shop.shop,
 
-            accessToken:
-                shop.accessToken
+            accessToken: shop.accessToken
 
         }
 
     });
 
 }
+
 /*
 |--------------------------------------------------------------------------
 | Create GraphQL Admin Client
@@ -122,39 +102,13 @@ export function getAdminClient(session) {
 */
 
 export function getAdminClient(session) {
-export async function shopifyGraphQL(
 
-    session,
-
-    query,
-
-    variables = {}
-
-) {
-
-    const client = getAdminClient(session);
-
-    const response = await client.request(
-
-        query,
-
-        {
-
-            variables
-
-        }
-
-    );
-
-    return response.data;
-
-}
-
-    
     if (!session) {
 
         throw new Error(
+
             "Shopify session is required."
+
         );
 
     }
