@@ -1459,3 +1459,272 @@ export async function handleProductDeleted(
     }
 
 }
+/*
+|--------------------------------------------------------------------------
+| Handle Customer Created Webhook
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerCreated(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+
+        logger.info(
+
+            "Processing customer created webhook.",
+
+            {
+
+                shop: shop.shopDomain,
+
+                customerId: payload?.id
+
+            }
+
+        );
+
+
+        const customer =
+
+            await CustomerService.createCustomer({
+
+                shop: shop._id,
+
+                firstName: payload.first_name,
+
+                lastName: payload.last_name,
+
+                email: payload.email,
+
+                phone: payload.phone
+
+            });
+
+
+        return {
+
+            processed: true,
+
+            event: "customer_created",
+
+            customer
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Customer created webhook failed.",
+
+            {
+
+                error: error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Handle Customer Updated Webhook
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerUpdated(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            shop,
+
+            payload
+
+        } = context;
+
+
+        const customer =
+
+            await CustomerService.findCustomerByEmail(
+
+                payload.email
+
+            );
+
+
+        if (!customer) {
+
+            return {
+
+                processed: false,
+
+                reason: "Customer not found"
+
+            };
+
+        }
+
+
+        const updatedCustomer =
+
+            await CustomerService.updateCustomer(
+
+                customer._id,
+
+                {
+
+                    firstName: payload.first_name,
+
+                    lastName: payload.last_name,
+
+                    phone: payload.phone
+
+                }
+
+            );
+
+
+        return {
+
+            processed: true,
+
+            event: "customer_updated",
+
+            customer: updatedCustomer
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Customer updated webhook failed.",
+
+            {
+
+                error: error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Handle Customer Deleted Webhook
+|--------------------------------------------------------------------------
+*/
+
+export async function handleCustomerDeleted(
+
+    context
+
+) {
+
+    try {
+
+        const {
+
+            payload
+
+        } = context;
+
+
+        const customer =
+
+            await CustomerService.findCustomerByEmail(
+
+                payload.email
+
+            );
+
+
+        if (!customer) {
+
+            return {
+
+                processed: false,
+
+                reason: "Customer not found"
+
+            };
+
+        }
+
+
+        await CustomerService.deleteCustomer(
+
+            customer._id
+
+        );
+
+
+        return {
+
+            processed: true,
+
+            event: "customer_deleted",
+
+            customerId: customer._id
+
+        };
+
+
+    } catch (error) {
+
+
+        logger.error(
+
+            "Customer deleted webhook failed.",
+
+            {
+
+                error: error.message
+
+            }
+
+        );
+
+
+        throw error;
+
+    }
+
+}
