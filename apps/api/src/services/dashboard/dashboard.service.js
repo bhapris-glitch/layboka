@@ -1,288 +1,366 @@
-import Conversation from "../../models/Conversation.js";
-import Message from "../../models/Message.js";
-import Visitor from "../../models/Visitor.js";
-import Order from "../../models/Order.js";
-import Product from "../../models/Product.js";
-import Analytics from "../../models/Analytics.js";
-
-const DEFAULT_DAYS = 30;
-
 /*
 |--------------------------------------------------------------------------
-| Date Range Helper
+| Imports
 |--------------------------------------------------------------------------
 */
 
-function getDateRange(days = DEFAULT_DAYS) {
+import Shop from "../../models/shop.model.js";
 
-    const endDate = new Date();
+import Conversation from "../../models/conversation.model.js";
 
-    const startDate = new Date();
+import Payment from "../../models/payment.model.js";
 
-    startDate.setDate(
+import Subscription from "../../models/subscription.model.js";
 
-        endDate.getDate() - days
+import Analytics from "../../models/analytics.model.js";
+
+import Notification from "../../models/notification.model.js";
+
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Helpers
+|--------------------------------------------------------------------------
+*/
+
+async function findShop(
+
+    shopId
+
+) {
+
+    const shop =
+
+        await Shop.findById(
+
+            shopId
+
+        );
+
+    if (
+
+        !shop
+
+    ) {
+
+        throw new Error(
+
+            "Shop not found."
+
+        );
+
+    }
+
+    return shop;
+
+}
+
+
+function percentageChange(
+
+    current,
+
+    previous
+
+) {
+
+    if (
+
+        previous === 0
+
+    ) {
+
+        return current > 0
+
+            ? 100
+
+            : 0;
+
+    }
+
+    return Number(
+
+        (
+
+            (
+
+                (
+
+                    current -
+
+                    previous
+
+                ) /
+
+                previous
+
+            ) *
+
+            100
+
+        ).toFixed(
+
+            2
+
+        )
 
     );
 
-    return {
-
-        startDate,
-
-        endDate
-
-    };
-
 }
 
-/*
-|--------------------------------------------------------------------------
-| Dashboard Summary
-|--------------------------------------------------------------------------
-*/
 
-export async function getDashboardSummary(
+function formatCurrency(
 
-    shopId,
-
-    days = DEFAULT_DAYS
+    amount = 0
 
 ) {
 
-    const {
+    return Number(
 
-        startDate,
+        amount.toFixed(
 
-        endDate
+            2
 
-    } = getDateRange(days);
+        )
 
-    const [
-
-        totalVisitors,
-
-        totalConversations,
-
-        totalMessages,
-
-        totalOrders
-
-    ] = await Promise.all([
-
-        Visitor.countDocuments({
-
-            shop: shopId,
-
-            createdAt: {
-
-                $gte: startDate,
-
-                $lte: endDate
-
-            }
-
-        }),
-
-        Conversation.countDocuments({
-
-            shop: shopId,
-
-            createdAt: {
-
-                $gte: startDate,
-
-                $lte: endDate
-
-            }
-
-        }),
-
-        Message.countDocuments({
-
-            shop: shopId,
-
-            createdAt: {
-
-                $gte: startDate,
-
-                $lte: endDate
-
-            }
-
-        }),
-
-        Order.countDocuments({
-
-            shop: shopId,
-
-            createdAt: {
-
-                $gte: startDate,
-
-                $lte: endDate
-
-            }
-
-        })
-
-    ]);
-
-    return {
-
-        totalVisitors,
-
-        totalConversations,
-
-        totalMessages,
-
-        totalOrders
-
-    };
+    );
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| KPI Overview
+| Dashboard KPI Mapper
 |--------------------------------------------------------------------------
 */
 
-export async function getKPIOverview(
+function mapDashboardKPIs(
 
-    shopId,
-
-    days = DEFAULT_DAYS
+    data
 
 ) {
-
-    const {
-
-        startDate,
-
-        endDate
-
-    } = getDateRange(days);
-
-    const revenue = await Order.aggregate([
-
-        {
-
-            $match: {
-
-                shop: shopId,
-
-                createdAt: {
-
-                    $gte: startDate,
-
-                    $lte: endDate
-
-                }
-
-            }
-
-        },
-
-        {
-
-            $group: {
-
-                _id: null,
-
-                revenue: {
-
-                    $sum: "$total"
-
-                },
-
-                orders: {
-
-                    $sum: 1
-
-                }
-
-            }
-
-        }
-
-    ]);
 
     return {
 
         revenue:
 
-            revenue[0]?.revenue || 0,
+            formatCurrency(
+
+                data.revenue || 0
+
+            ),
+
+        conversations:
+
+            data.conversations || 0,
+
+        visitors:
+
+            data.visitors || 0,
+
+        conversions:
+
+            data.conversions || 0,
+
+        conversionRate:
+
+            data.conversionRate || 0,
 
         orders:
 
-            revenue[0]?.orders || 0
+            data.orders || 0,
+
+        unreadNotifications:
+
+            data.unreadNotifications || 0,
+
+        activePlan:
+
+            data.activePlan || "Trial",
+
+        trialRemaining:
+
+            data.trialRemaining || 0
 
     };
 
 }
 /*
 |--------------------------------------------------------------------------
-| Revenue Dashboard
+| Dashboard Overview
 |--------------------------------------------------------------------------
 */
 
-export async function getRevenueMetrics(
+async function getDashboardOverview(
 
-    shopId,
-
-    startDate,
-
-    endDate
+    shopId
 
 ) {
 
-    const revenue = await Order.aggregate([
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    const [
+
+        conversations,
+
+        visitors,
+
+        notifications,
+
+        revenue,
+
+        subscription
+
+    ] = await Promise.all([
+
+        Conversation.countDocuments({
+
+            shop: shopId
+
+        }),
+
+        Analytics.countDocuments({
+
+            shop: shopId
+
+        }),
+
+        Notification.countDocuments({
+
+            shop: shopId,
+
+            isRead: false
+
+        }),
+
+        Payment.aggregate([
+
+            {
+
+                $match: {
+
+                    shop: shop._id,
+
+                    status: "paid"
+
+                }
+
+            },
+
+            {
+
+                $group: {
+
+                    _id: null,
+
+                    revenue: {
+
+                        $sum: "$amount"
+
+                    }
+
+                }
+
+            }
+
+        ]),
+
+        Subscription.findOne({
+
+            shop: shop._id,
+
+            status: "active"
+
+        })
+
+    ]);
+
+    return mapDashboardKPIs({
+
+        revenue:
+
+            revenue[0]?.revenue || 0,
+
+        conversations,
+
+        visitors,
+
+        unreadNotifications:
+
+            notifications,
+
+        activePlan:
+
+            subscription?.plan ||
+
+            "Trial",
+
+        trialRemaining:
+
+            shop.trialDaysRemaining || 0
+
+    });
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Revenue Summary
+|--------------------------------------------------------------------------
+*/
+
+async function getRevenueSummary(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const revenue = await Payment.aggregate([
 
         {
+
             $match: {
 
                 shop: shopId,
 
-                createdAt: {
-
-                    $gte: startDate,
-
-                    $lte: endDate
-
-                },
-
-                deleted: false
+                status: "paid"
 
             }
 
         },
 
         {
+
             $group: {
 
                 _id: null,
 
                 totalRevenue: {
 
-                    $sum: "$total"
+                    $sum: "$amount"
 
                 },
 
-                totalOrders: {
+                totalPayments: {
 
                     $sum: 1
 
                 },
 
-                averageOrderValue: {
+                averagePayment: {
 
-                    $avg: "$total"
-
-                },
-
-                aiRevenue: {
-
-                    $sum: "$aiRevenue.directRevenue"
+                    $avg: "$amount"
 
                 }
 
@@ -296,446 +374,788 @@ export async function getRevenueMetrics(
 
         totalRevenue: 0,
 
+        totalPayments: 0,
+
+        averagePayment: 0
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Subscription Summary
+|--------------------------------------------------------------------------
+*/
+
+async function getSubscriptionSummary(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const subscription =
+
+        await Subscription.findOne({
+
+            shop: shopId
+
+        });
+
+    if (
+
+        !subscription
+
+    ) {
+
+        return {
+
+            status: "trial",
+
+            plan: "Free Trial",
+
+            expiresAt: null
+
+        };
+
+    }
+
+    return subscription;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Trial Summary
+|--------------------------------------------------------------------------
+*/
+
+async function getTrialSummary(
+
+    shopId
+
+) {
+
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    return {
+
+        isTrial:
+
+            shop.isTrial,
+
+        trialStartedAt:
+
+            shop.trialStartedAt,
+
+        trialEndsAt:
+
+            shop.trialEndsAt,
+
+        daysRemaining:
+
+            shop.trialDaysRemaining,
+
+        expired:
+
+            shop.trialExpired
+
+    };
+
+        }
+/*
+|--------------------------------------------------------------------------
+| AI Sales Executive Settings
+|--------------------------------------------------------------------------
+*/
+
+async function getSalesExecutiveSettings(
+
+    shopId
+
+) {
+
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    return {
+
+        salesExecutiveName:
+
+            shop.salesExecutiveName ||
+
+            "Emma",
+
+        avatar:
+
+            shop.salesExecutiveAvatar ||
+
+            "/assets/avatars/emma.png",
+
+        avatarType:
+
+            shop.avatarType ||
+
+            "female",
+
+        onlineStatus:
+
+            shop.onlineStatus ||
+
+            "online",
+
+        language:
+
+            shop.language ||
+
+            "en",
+
+        tone:
+
+            shop.aiTone ||
+
+            "professional",
+
+        typingSpeed:
+
+            shop.typingSpeed ||
+
+            "normal"
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Chatbot Appearance
+|--------------------------------------------------------------------------
+*/
+
+async function getChatbotAppearance(
+
+    shopId
+
+) {
+
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    return {
+
+        storeName:
+
+            shop.storeName,
+
+        chatbotHeader:
+
+            shop.chatbotHeader ||
+
+            shop.storeName,
+
+        themeColor:
+
+            shop.themeColor ||
+
+            "#FF3B2F",
+
+        headerColor:
+
+            shop.headerColor ||
+
+            "#1E3928",
+
+        textColor:
+
+            shop.textColor ||
+
+            "#FFFFFF",
+
+        borderRadius:
+
+            shop.borderRadius ||
+
+            16,
+
+        chatPosition:
+
+            shop.chatPosition ||
+
+            "right",
+
+        fontFamily:
+
+            shop.fontFamily ||
+
+            "Inter"
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Branding Settings
+|--------------------------------------------------------------------------
+*/
+
+async function getBrandingSettings(
+
+    shopId
+
+) {
+
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    return {
+
+        logo:
+
+            shop.logo ||
+
+            "",
+
+        favicon:
+
+            shop.favicon ||
+
+            "",
+
+        companyName:
+
+            shop.companyName ||
+
+            shop.storeName,
+
+        supportEmail:
+
+            shop.supportEmail ||
+
+            "",
+
+        supportPhone:
+
+            shop.supportPhone ||
+
+            "",
+
+        website:
+
+            shop.website ||
+
+            "",
+
+        socialLinks:
+
+            shop.socialLinks ||
+
+            []
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Welcome Message
+|--------------------------------------------------------------------------
+*/
+
+async function getWelcomeMessage(
+
+    shopId
+
+) {
+
+    const shop = await findShop(
+
+        shopId
+
+    );
+
+    return {
+
+        title:
+
+            shop.welcomeTitle ||
+
+            "👋 Welcome!",
+
+        message:
+
+            shop.welcomeMessage ||
+
+            "Hi! I'm your AI Sales Executive. How can I help you today?",
+
+        buttonText:
+
+            shop.welcomeButton ||
+
+            "Start Shopping",
+
+        couponCode:
+
+            shop.couponCode ||
+
+            "",
+
+        discountLabel:
+
+            shop.discountLabel ||
+
+            ""
+
+    };
+
+}
+/*
+|--------------------------------------------------------------------------
+| AI Sales Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getAISalesDashboard(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const [
+
+        conversationMetrics,
+
+        paymentMetrics,
+
+        analytics
+
+    ] = await Promise.all([
+
+        Conversation.aggregate([
+
+            {
+
+                $match: {
+
+                    shop: shopId
+
+                }
+
+            },
+
+            {
+
+                $group: {
+
+                    _id: null,
+
+                    totalChats: {
+
+                        $sum: 1
+
+                    },
+
+                    totalMessages: {
+
+                        $sum: "$totalMessages"
+
+                    },
+
+                    aiResolved: {
+
+                        $sum: {
+
+                            $cond: [
+
+                                {
+
+                                    $eq: [
+
+                                        "$status",
+
+                                        "resolved"
+
+                                    ]
+
+                                },
+
+                                1,
+
+                                0
+
+                            ]
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        ]),
+
+        Payment.aggregate([
+
+            {
+
+                $match: {
+
+                    shop: shopId,
+
+                    status: "paid"
+
+                }
+
+            },
+
+            {
+
+                $group: {
+
+                    _id: null,
+
+                    aiRevenue: {
+
+                        $sum: "$amount"
+
+                    },
+
+                    totalOrders: {
+
+                        $sum: 1
+
+                    }
+
+                }
+
+            }
+
+        ]),
+
+        Analytics.findOne({
+
+            shop: shopId
+
+        })
+
+    ]);
+
+    return {
+
+        chats:
+
+            conversationMetrics[0]?.totalChats || 0,
+
+        messages:
+
+            conversationMetrics[0]?.totalMessages || 0,
+
+        resolvedChats:
+
+            conversationMetrics[0]?.aiResolved || 0,
+
+        aiRevenue:
+
+            paymentMetrics[0]?.aiRevenue || 0,
+
+        totalOrders:
+
+            paymentMetrics[0]?.totalOrders || 0,
+
+        conversionRate:
+
+            analytics?.conversionRate || 0,
+
+        averageResponseTime:
+
+            analytics?.averageResponseTime || 0,
+
+        customerSatisfaction:
+
+            analytics?.customerSatisfaction || 0
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AI Performance Metrics
+|--------------------------------------------------------------------------
+*/
+
+async function getAIPerformanceMetrics(
+
+    shopId
+
+) {
+
+    const dashboard =
+
+        await getAISalesDashboard(
+
+            shopId
+
+        );
+
+    return {
+
+        responseAccuracy: 98.5,
+
+        averageReplyTime:
+
+            dashboard.averageResponseTime,
+
+        conversationsHandled:
+
+            dashboard.chats,
+
+        resolvedConversations:
+
+            dashboard.resolvedChats,
+
+        customerRating:
+
+            dashboard.customerSatisfaction,
+
+        aiRevenue:
+
+            dashboard.aiRevenue
+
+    };
+
+                                    }
+/*
+|--------------------------------------------------------------------------
+| Visitor Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getVisitorDashboard(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const analytics =
+
+        await Analytics.findOne({
+
+            shop: shopId
+
+        });
+
+    return {
+
+        totalVisitors:
+
+            analytics?.totalVisitors || 0,
+
+        uniqueVisitors:
+
+            analytics?.uniqueVisitors || 0,
+
+        returningVisitors:
+
+            analytics?.returningVisitors || 0,
+
+        onlineVisitors:
+
+            analytics?.onlineVisitors || 0,
+
+        bounceRate:
+
+            analytics?.bounceRate || 0,
+
+        averageSessionDuration:
+
+            analytics?.averageSessionDuration || 0
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Sales Analytics
+|--------------------------------------------------------------------------
+*/
+
+async function getSalesAnalytics(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const sales =
+
+        await Payment.aggregate([
+
+            {
+
+                $match: {
+
+                    shop: shopId,
+
+                    status: "paid"
+
+                }
+
+            },
+
+            {
+
+                $group: {
+
+                    _id: null,
+
+                    totalSales: {
+
+                        $sum: "$amount"
+
+                    },
+
+                    totalOrders: {
+
+                        $sum: 1
+
+                    },
+
+                    averageOrderValue: {
+
+                        $avg: "$amount"
+
+                    },
+
+                    highestOrder: {
+
+                        $max: "$amount"
+
+                    }
+
+                }
+
+            }
+
+        ]);
+
+    return sales[0] || {
+
+        totalSales: 0,
+
         totalOrders: 0,
 
         averageOrderValue: 0,
 
-        aiRevenue: 0
+        highestOrder: 0
 
     };
 
 }
 
-/*
-|--------------------------------------------------------------------------
-| AI Usage Metrics
-|--------------------------------------------------------------------------
-*/
-
-export async function getAIUsageMetrics(
-
-    shopId,
-
-    startDate,
-
-    endDate
-
-) {
-
-    const usage = await Conversation.aggregate([
-
-        {
-
-            $match: {
-
-                shop: shopId,
-
-                createdAt: {
-
-                    $gte: startDate,
-
-                    $lte: endDate
-
-                },
-
-                deleted: false
-
-            }
-
-        },
-
-        {
-
-            $group: {
-
-                _id: null,
-
-                conversations: {
-
-                    $sum: 1
-
-                },
-
-                messages: {
-
-                    $sum: "$totalMessages"
-
-                },
-
-                promptTokens: {
-
-                    $sum: "$promptTokens"
-
-                },
-
-                completionTokens: {
-
-                    $sum: "$completionTokens"
-
-                },
-
-                totalTokens: {
-
-                    $sum: "$totalTokens"
-
-                },
-
-                estimatedCost: {
-
-                    $sum: "$estimatedCost"
-
-                }
-
-            }
-
-        }
-
-    ]);
-
-    return usage[0] || {
-
-        conversations: 0,
-
-        messages: 0,
-
-        promptTokens: 0,
-
-        completionTokens: 0,
-
-        totalTokens: 0,
-
-        estimatedCost: 0
-
-    };
-
-}
 
 /*
 |--------------------------------------------------------------------------
-| Visitor Metrics
+| Top Selling Products
 |--------------------------------------------------------------------------
 */
 
-export async function getVisitorMetrics(
-
-    shopId,
-
-    startDate,
-
-    endDate
-
-) {
-
-    const visitors = await Visitor.aggregate([
-
-        {
-
-            $match: {
-
-                shop: shopId,
-
-                createdAt: {
-
-                    $gte: startDate,
-
-                    $lte: endDate
-
-                },
-
-                deleted: false
-
-            }
-
-        },
-
-        {
-
-            $group: {
-
-                _id: null,
-
-                totalVisitors: {
-
-                    $sum: 1
-
-                },
-
-                returningVisitors: {
-
-                    $sum: {
-
-                        $cond: [
-
-                            {
-
-                                $gt: [
-
-                                    "$totalVisits",
-
-                                    1
-
-                                ]
-
-                            },
-
-                            1,
-
-                            0
-
-                        ]
-
-                    }
-
-                },
-
-                onlineVisitors: {
-
-                    $sum: {
-
-                        $cond: [
-
-                            "$isOnline",
-
-                            1,
-
-                            0
-
-                        ]
-
-                    }
-
-                }
-
-            }
-
-        }
-
-    ]);
-
-    return visitors[0] || {
-
-        totalVisitors: 0,
-
-        returningVisitors: 0,
-
-        onlineVisitors: 0
-
-    };
-
-      }
-/*
-|--------------------------------------------------------------------------
-| Revenue Analytics
-|--------------------------------------------------------------------------
-*/
-
-export async function getRevenueAnalytics(
-
-    shopId,
-
-    startDate,
-
-    endDate
-
-) {
-
-    const orders = await Order.find({
-
-        shop: shopId,
-
-        createdAt: {
-
-            $gte: startDate,
-
-            $lte: endDate
-
-        },
-
-        deleted: false
-
-    });
-
-    const analytics = {
-
-        totalRevenue: 0,
-
-        aiRevenue: 0,
-
-        recoveredRevenue: 0,
-
-        averageOrderValue: 0,
-
-        totalOrders: orders.length
-
-    };
-
-    for (const order of orders) {
-
-        analytics.totalRevenue += order.totalPrice || 0;
-
-        analytics.aiRevenue +=
-
-            order.aiAttributedRevenue || 0;
-
-        analytics.recoveredRevenue +=
-
-            order.recoveredRevenue || 0;
-
-    }
-
-    analytics.averageOrderValue =
-
-        analytics.totalOrders > 0
-
-            ? analytics.totalRevenue /
-
-              analytics.totalOrders
-
-            : 0;
-
-    return analytics;
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| AI Usage Analytics
-|--------------------------------------------------------------------------
-*/
-
-export async function getAIUsageAnalytics(
-
-    shopId,
-
-    startDate,
-
-    endDate
-
-) {
-
-    const conversations = await Conversation.find({
-
-        shop: shopId,
-
-        createdAt: {
-
-            $gte: startDate,
-
-            $lte: endDate
-
-        },
-
-        deleted: false
-
-    });
-
-    let totalPromptTokens = 0;
-
-    let totalCompletionTokens = 0;
-
-    let totalTokens = 0;
-
-    let totalCost = 0;
-
-    let apiCalls = 0;
-
-    conversations.forEach((conversation) => {
-
-        totalPromptTokens +=
-
-            conversation.promptTokens || 0;
-
-        totalCompletionTokens +=
-
-            conversation.completionTokens || 0;
-
-        totalTokens +=
-
-            conversation.totalTokens || 0;
-
-        totalCost +=
-
-            conversation.estimatedCost || 0;
-
-        apiCalls +=
-
-            conversation.apiCalls || 0;
-
-    });
-
-    return {
-
-        conversations:
-
-            conversations.length,
-
-        apiCalls,
-
-        promptTokens:
-
-            totalPromptTokens,
-
-        completionTokens:
-
-            totalCompletionTokens,
-
-        totalTokens,
-
-        estimatedCost:
-
-            totalCost
-
-    };
-
-}
-
-/*
-|--------------------------------------------------------------------------
-| Top Recommended Products
-|--------------------------------------------------------------------------
-*/
-
-export async function getTopProducts(
+async function getTopSellingProducts(
 
     shopId,
 
     limit = 10
 
 ) {
+
+    await findShop(
+
+        shopId
+
+    );
 
     return Product.find({
 
         shop: shopId,
 
-        deleted: false
+        status: "active"
 
     })
 
     .sort({
 
-        aiRecommendationScore: -1,
+        salesCount: -1,
 
-        totalSales: -1
+        revenue: -1
 
     })
 
-    .limit(limit)
+    .limit(
+
+        limit
+
+    )
 
     .select(
 
-        "title image price totalSales aiRecommendationScore"
-
+        "title image price salesCount revenue inventory"
     );
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
-| Recent Conversations
+| Recent Dashboard Activity
 |--------------------------------------------------------------------------
 */
 
-export async function getRecentConversations(
+async function getRecentDashboardActivity(
 
     shopId,
 
@@ -743,120 +1163,491 @@ export async function getRecentConversations(
 
 ) {
 
-    return Conversation.find({
+    await findShop(
 
-        shop: shopId,
-
-        deleted: false
-
-    })
-
-    .populate(
-
-        "visitor",
-
-        "customerName customerEmail"
-
-    )
-
-    .sort({
-
-        updatedAt: -1
-
-    })
-
-    .limit(limit)
-
-    .select(
-
-        "conversationId status customerStage detectedIntent lastMessageAt totalMessages"
+        shopId
 
     );
 
-}
+    const [
+
+        payments,
+
+        conversations,
+
+        notifications
+
+    ] = await Promise.all([
+
+        Payment.find({
+
+            shop: shopId
+
+        })
+
+        .sort({
+
+            createdAt: -1
+
+        })
+
+        .limit(limit),
+
+        Conversation.find({
+
+            shop: shopId
+
+        })
+
+        .sort({
+
+            createdAt: -1
+
+        })
+
+        .limit(limit),
+
+        Notification.find({
+
+            shop: shopId
+
+        })
+
+        .sort({
+
+            createdAt: -1
+
+        })
+
+        .limit(limit)
+
+    ]);
+
+    return {
+
+        recentPayments:
+
+            payments,
+
+        recentChats:
+
+            conversations,
+
+        recentNotifications:
+
+            notifications
+
+    };
+
+        }
 /*
 |--------------------------------------------------------------------------
-| Build Dashboard Summary
+| Subscription Dashboard
 |--------------------------------------------------------------------------
 */
 
-export async function buildDashboardSummary(
+async function getSubscriptionDashboard(
 
-    shopId,
+    shopId
 
-    startDate,
+) {
 
-    endDate
+    await findShop(
+
+        shopId
+
+    );
+
+    const subscription =
+
+        await Subscription.findOne({
+
+            shop: shopId
+
+        });
+
+    if (
+
+        !subscription
+
+    ) {
+
+        return {
+
+            status: "trial",
+
+            plan: "Premium Trial",
+
+            active: false,
+
+            renewsAt: null,
+
+            expiresAt: null
+
+        };
+
+    }
+
+    return {
+
+        status:
+
+            subscription.status,
+
+        plan:
+
+            subscription.plan,
+
+        active:
+
+            subscription.status === "active",
+
+        renewsAt:
+
+            subscription.currentPeriodEnd,
+
+        expiresAt:
+
+            subscription.expiresAt,
+
+        cancelled:
+
+            subscription.cancelAtPeriodEnd ||
+
+            false
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Billing Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getBillingDashboard(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const payments =
+
+        await Payment.find({
+
+            shop: shopId,
+
+            status: "paid"
+
+        })
+
+        .sort({
+
+            createdAt: -1
+
+        })
+
+        .limit(
+
+            10
+
+        );
+
+    const totalSpent =
+
+        payments.reduce(
+
+            (
+
+                total,
+
+                payment
+
+            ) =>
+
+                total +
+
+                (
+
+                    payment.amount ||
+
+                    0
+
+                ),
+
+            0
+
+        );
+
+    return {
+
+        totalSpent,
+
+        invoices:
+
+            payments.length,
+
+        latestPayments:
+
+            payments
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Trial Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getTrialDashboard(
+
+    shopId
+
+) {
+
+    const shop =
+
+        await findShop(
+
+            shopId
+
+        );
+
+    return {
+
+        isTrial:
+
+            shop.isTrial ||
+
+            false,
+
+        startedAt:
+
+            shop.trialStartedAt,
+
+        expiresAt:
+
+            shop.trialEndsAt,
+
+        daysRemaining:
+
+            shop.trialDaysRemaining ||
+
+            0,
+
+        expired:
+
+            shop.trialExpired ||
+
+            false,
+
+        chatbotLocked:
+
+            shop.chatbotLocked ||
+
+            false
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Plan Usage Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getPlanUsageDashboard(
+
+    shopId
 
 ) {
 
     const [
 
-        overview,
-
-        revenue,
-
         conversations,
 
-        visitors,
+        notifications,
 
-        products,
-
-        subscription
+        products
 
     ] = await Promise.all([
 
-        getOverviewMetrics(
+        Conversation.countDocuments({
 
-            shopId,
+            shop: shopId
 
-            startDate,
+        }),
 
-            endDate
+        Notification.countDocuments({
+
+            shop: shopId
+
+        }),
+
+        Product.countDocuments({
+
+            shop: shopId
+
+        })
+
+    ]);
+
+    return {
+
+        conversations,
+
+        notifications,
+
+        products,
+
+        aiExecutives: 1,
+
+        customAvatar: true,
+
+        apiRequests: "Unlimited",
+
+        storage: "Unlimited"
+
+    };
+
+        }
+/*
+|--------------------------------------------------------------------------
+| Notification Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getNotificationDashboard(
+
+    shopId
+
+) {
+
+    await findShop(
+
+        shopId
+
+    );
+
+    const [
+
+        total,
+
+        unread,
+
+        payment,
+
+        trial,
+
+        system
+
+    ] = await Promise.all([
+
+        Notification.countDocuments({
+
+            shop: shopId
+
+        }),
+
+        Notification.countDocuments({
+
+            shop: shopId,
+
+            isRead: false
+
+        }),
+
+        Notification.countDocuments({
+
+            shop: shopId,
+
+            category: "payment"
+
+        }),
+
+        Notification.countDocuments({
+
+            shop: shopId,
+
+            category: "trial"
+
+        }),
+
+        Notification.countDocuments({
+
+            shop: shopId,
+
+            category: "system"
+
+        })
+
+    ]);
+
+    return {
+
+        total,
+
+        unread,
+
+        payment,
+
+        trial,
+
+        system
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Performance Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getPerformanceDashboard(
+
+    shopId
+
+) {
+
+    const [
+
+        revenue,
+
+        visitors,
+
+        ai
+
+    ] = await Promise.all([
+
+        getRevenueSummary(
+
+            shopId
 
         ),
 
-        getRevenueMetrics(
+        getVisitorDashboard(
 
-            shopId,
-
-            startDate,
-
-            endDate
+            shopId
 
         ),
 
-        getConversationMetrics(
-
-            shopId,
-
-            startDate,
-
-            endDate
-
-        ),
-
-        getVisitorMetrics(
-
-            shopId,
-
-            startDate,
-
-            endDate
-
-        ),
-
-        getTopProducts(
-
-            shopId,
-
-            startDate,
-
-            endDate
-
-        ),
-
-        getSubscriptionMetrics(
+        getAISalesDashboard(
 
             shopId
 
@@ -866,71 +1657,920 @@ export async function buildDashboardSummary(
 
     return {
 
-        generatedAt: new Date(),
+        totalRevenue:
 
-        period: {
+            revenue.totalRevenue,
 
-            startDate,
+        totalVisitors:
 
-            endDate
+            visitors.totalVisitors,
 
-        },
+        conversionRate:
 
-        overview,
+            ai.conversionRate,
 
-        revenue,
+        customerSatisfaction:
 
-        conversations,
+            ai.customerSatisfaction,
 
-        visitors,
+        aiRevenue:
 
-        products,
+            ai.aiRevenue,
 
-        subscription
+        aiChats:
+
+            ai.chats
 
     };
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Quick Actions
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardQuickActions(
+
+    shopId
+
+) {
+
+    const subscription =
+
+        await getSubscriptionDashboard(
+
+            shopId
+
+        );
+
+    const trial =
+
+        await getTrialDashboard(
+
+            shopId
+
+        );
+
+    return {
+
+        editSalesExecutive: true,
+
+        changeAvatar: true,
+
+        customizeChatbot: true,
+
+        manageProducts: true,
+
+        syncShopifyProducts: true,
+
+        viewAnalytics: true,
+
+        billing: true,
+
+        notifications: true,
+
+        upgradePlan:
+
+            subscription.plan !==
+
+            "Premium",
+
+        rechargeNow:
+
+            trial.expired ||
+
+            subscription.status !==
+
+            "active"
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Health Status
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardHealthStatus(
+
+    shopId
+
+) {
+
+    const [
+
+        subscription,
+
+        trial,
+
+        notifications
+
+    ] = await Promise.all([
+
+        getSubscriptionDashboard(
+
+            shopId
+
+        ),
+
+        getTrialDashboard(
+
+            shopId
+
+        ),
+
+        getNotificationDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        chatbotOnline:
+
+            !trial.chatbotLocked,
+
+        subscriptionActive:
+
+            subscription.active,
+
+        trialExpired:
+
+            trial.expired,
+
+        unreadNotifications:
+
+            notifications.unread,
+
+        overallHealth:
+
+            (
+
+                subscription.active &&
+
+                !trial.chatbotLocked
+
+            )
+
+                ? "healthy"
+
+                : "attention"
+
+    };
+
+                                    }
+/*
+|--------------------------------------------------------------------------
+| Dashboard Insights
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardInsights(
+
+    shopId
+
+) {
+
+    const [
+
+        performance,
+
+        sales,
+
+        visitors,
+
+        trial
+
+    ] = await Promise.all([
+
+        getPerformanceDashboard(
+
+            shopId
+
+        ),
+
+        getSalesAnalytics(
+
+            shopId
+
+        ),
+
+        getVisitorDashboard(
+
+            shopId
+
+        ),
+
+        getTrialDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        topInsight:
+
+            performance.aiRevenue > 0
+
+                ? "AI Sales Executive is generating revenue."
+
+                : "Complete chatbot setup to start generating sales.",
+
+        visitors:
+
+            visitors.totalVisitors,
+
+        conversionRate:
+
+            performance.conversionRate,
+
+        averageOrderValue:
+
+            sales.averageOrderValue,
+
+        trialDaysRemaining:
+
+            trial.daysRemaining
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Alerts
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardAlerts(
+
+    shopId
+
+) {
+
+    const [
+
+        trial,
+
+        subscription,
+
+        notifications
+
+    ] = await Promise.all([
+
+        getTrialDashboard(
+
+            shopId
+
+        ),
+
+        getSubscriptionDashboard(
+
+            shopId
+
+        ),
+
+        getNotificationDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    const alerts = [];
+
+    if (
+
+        trial.expired
+
+    ) {
+
+        alerts.push({
+
+            type: "danger",
+
+            title: "Trial Expired",
+
+            message: "Your chatbot is locked. Recharge now."
+
+        });
+
+    }
+
+    if (
+
+        !subscription.active
+
+    ) {
+
+        alerts.push({
+
+            type: "warning",
+
+            title: "Subscription Inactive",
+
+            message: "Activate a subscription to continue using Layboka AI."
+
+        });
+
+    }
+
+    if (
+
+        notifications.unread >
+
+        0
+
+    ) {
+
+        alerts.push({
+
+            type: "info",
+
+            title: "Unread Notifications",
+
+            message: `${notifications.unread} unread notifications.`
+
+        });
+
+    }
+
+    return alerts;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Merchant Activity Feed
+|--------------------------------------------------------------------------
+*/
+
+async function getMerchantActivityFeed(
+
+    shopId
+
+) {
+
+    return await getRecentDashboardActivity(
+
+        shopId,
+
+        20
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Summary
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardSummary(
+
+    shopId
+
+) {
+
+    const [
+
+        overview,
+
+        performance,
+
+        billing,
+
+        notification
+
+    ] = await Promise.all([
+
+        getDashboardOverview(
+
+            shopId
+
+        ),
+
+        getPerformanceDashboard(
+
+            shopId
+
+        ),
+
+        getBillingDashboard(
+
+            shopId
+
+        ),
+
+        getNotificationDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        overview,
+
+        performance,
+
+        billing,
+
+        notification
+
+    };
+
+    }
+/*
+|--------------------------------------------------------------------------
+| Merchant Home Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getMerchantHomeDashboard(
+
+    shopId
+
+) {
+
+    const [
+
+        overview,
+
+        performance,
+
+        trial,
+
+        subscription,
+
+        quickActions,
+
+        alerts,
+
+        executive
+
+    ] = await Promise.all([
+
+        getDashboardOverview(
+
+            shopId
+
+        ),
+
+        getPerformanceDashboard(
+
+            shopId
+
+        ),
+
+        getTrialDashboard(
+
+            shopId
+
+        ),
+
+        getSubscriptionDashboard(
+
+            shopId
+
+        ),
+
+        getDashboardQuickActions(
+
+            shopId
+
+        ),
+
+        getDashboardAlerts(
+
+            shopId
+
+        ),
+
+        getSalesExecutiveSettings(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        executive,
+
+        overview,
+
+        performance,
+
+        trial,
+
+        subscription,
+
+        quickActions,
+
+        alerts
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AI Sales Executive Dashboard
+|--------------------------------------------------------------------------
+*/
+
+async function getAISalesExecutiveDashboard(
+
+    shopId
+
+) {
+
+    const [
+
+        executive,
+
+        appearance,
+
+        branding,
+
+        welcome
+
+    ] = await Promise.all([
+
+        getSalesExecutiveSettings(
+
+            shopId
+
+        ),
+
+        getChatbotAppearance(
+
+            shopId
+
+        ),
+
+        getBrandingSettings(
+
+            shopId
+
+        ),
+
+        getWelcomeMessage(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        executive,
+
+        appearance,
+
+        branding,
+
+        welcome
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Dashboard Configuration
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardConfiguration(
+
+    shopId
+
+) {
+
+    const [
+
+        appearance,
+
+        branding,
+
+        plan
+
+    ] = await Promise.all([
+
+        getChatbotAppearance(
+
+            shopId
+
+        ),
+
+        getBrandingSettings(
+
+            shopId
+
+        ),
+
+        getSubscriptionDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        appearance,
+
+        branding,
+
+        currentPlan:
+
+            plan.plan,
+
+        features: {
+
+            customAvatar:
+
+                true,
+
+            aiSalesExecutive:
+
+                true,
+
+            analytics:
+
+                true,
+
+            notifications:
+
+                true,
+
+            branding:
+
+                true,
+
+            shopifySync:
+
+                true
+
+        }
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Complete Dashboard Data
+|--------------------------------------------------------------------------
+*/
+
+async function getCompleteDashboard(
+
+    shopId
+
+) {
+
+    const [
+
+        home,
+
+        insights,
+
+        summary,
+
+        activity,
+
+        health,
+
+        notifications
+
+    ] = await Promise.all([
+
+        getMerchantHomeDashboard(
+
+            shopId
+
+        ),
+
+        getDashboardInsights(
+
+            shopId
+
+        ),
+
+        getDashboardSummary(
+
+            shopId
+
+        ),
+
+        getMerchantActivityFeed(
+
+            shopId
+
+        ),
+
+        getDashboardHealthStatus(
+
+            shopId
+
+        ),
+
+        getNotificationDashboard(
+
+            shopId
+
+        )
+
+    ]);
+
+    return {
+
+        home,
+
+        insights,
+
+        summary,
+
+        activity,
+
+        health,
+
+        notifications
+
+    };
+
+}
 /*
 |--------------------------------------------------------------------------
 | Dashboard Service
 |--------------------------------------------------------------------------
 */
 
-export const DashboardService = {
+const DashboardService = {
 
-    getOverviewMetrics,
+    getDashboardOverview,
 
-    getRevenueMetrics,
+    getRevenueSummary,
 
-    getConversationMetrics,
+    getSubscriptionSummary,
 
-    getVisitorMetrics,
+    getTrialSummary,
 
-    getTopProducts,
+    getSalesExecutiveSettings,
 
-    getRevenueChart,
+    getChatbotAppearance,
 
-    getConversationChart,
+    getBrandingSettings,
 
-    getVisitorChart,
+    getWelcomeMessage,
 
-    getSalesFunnel,
+    getAISalesDashboard,
 
-    getRecentOrders,
+    getAIPerformanceMetrics,
 
-    getRecentConversations,
+    getVisitorDashboard,
 
-    getRecentVisitors,
+    getSalesAnalytics,
 
-    getTopPerformingProducts,
+    getTopSellingProducts,
 
-    getSubscriptionMetrics,
+    getRecentDashboardActivity,
 
-    buildDashboardSummary
+    getSubscriptionDashboard,
+
+    getBillingDashboard,
+
+    getTrialDashboard,
+
+    getPlanUsageDashboard,
+
+    getNotificationDashboard,
+
+    getPerformanceDashboard,
+
+    getDashboardQuickActions,
+
+    getDashboardHealthStatus,
+
+    getDashboardInsights,
+
+    getDashboardAlerts,
+
+    getMerchantActivityFeed,
+
+    getDashboardSummary,
+
+    getMerchantHomeDashboard,
+
+    getAISalesExecutiveDashboard,
+
+    getDashboardConfiguration,
+
+    getCompleteDashboard
 
 };
+
+
+/*
+|--------------------------------------------------------------------------
+| Named Exports
+|--------------------------------------------------------------------------
+*/
+
+export {
+
+    DashboardService,
+
+    getDashboardOverview,
+
+    getRevenueSummary,
+
+    getSubscriptionSummary,
+
+    getTrialSummary,
+
+    getSalesExecutiveSettings,
+
+    getChatbotAppearance,
+
+    getBrandingSettings,
+
+    getWelcomeMessage,
+
+    getAISalesDashboard,
+
+    getAIPerformanceMetrics,
+
+    getVisitorDashboard,
+
+    getSalesAnalytics,
+
+    getTopSellingProducts,
+
+    getRecentDashboardActivity,
+
+    getSubscriptionDashboard,
+
+    getBillingDashboard,
+
+    getTrialDashboard,
+
+    getPlanUsageDashboard,
+
+    getNotificationDashboard,
+
+    getPerformanceDashboard,
+
+    getDashboardQuickActions,
+
+    getDashboardHealthStatus,
+
+    getDashboardInsights,
+
+    getDashboardAlerts,
+
+    getMerchantActivityFeed,
+
+    getDashboardSummary,
+
+    getMerchantHomeDashboard,
+
+    getAISalesExecutiveDashboard,
+
+    getDashboardConfiguration,
+
+    getCompleteDashboard
+
+};
+
 
 /*
 |--------------------------------------------------------------------------
