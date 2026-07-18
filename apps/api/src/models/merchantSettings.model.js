@@ -555,3 +555,476 @@ requireConsent: {
     default: true
 
         }
+/*
+|--------------------------------------------------------------------------
+| Business Information
+|--------------------------------------------------------------------------
+*/
+
+supportEmail: {
+
+    type: String,
+
+    trim: true,
+
+    lowercase: true,
+
+    default: ""
+
+},
+
+supportPhone: {
+
+    type: String,
+
+    trim: true,
+
+    default: ""
+
+},
+
+businessAddress: {
+
+    type: String,
+
+    default: ""
+
+},
+
+website: {
+
+    type: String,
+
+    default: ""
+
+},
+
+businessDescription: {
+
+    type: String,
+
+    default: ""
+
+},
+
+currency: {
+
+    type: String,
+
+    default: "USD"
+
+},
+
+timezone: {
+
+    type: String,
+
+    default: "UTC"
+
+},
+
+country: {
+
+    type: String,
+
+    default: ""
+
+},
+
+state: {
+
+    type: String,
+
+    default: ""
+
+},
+
+city: {
+
+    type: String,
+
+    default: ""
+
+},
+
+
+/*
+|--------------------------------------------------------------------------
+| Customer Support
+|--------------------------------------------------------------------------
+*/
+
+enableLiveChat: {
+
+    type: Boolean,
+
+    default: true
+
+},
+
+enableEmailSupport: {
+
+    type: Boolean,
+
+    default: true
+
+},
+
+enablePhoneSupport: {
+
+    type: Boolean,
+
+    default: false
+
+},
+
+enableWhatsappSupport: {
+
+    type: Boolean,
+
+    default: true
+
+},
+
+whatsappNumber: {
+
+    type: String,
+
+    default: ""
+
+},
+
+contactUsUrl: {
+
+    type: String,
+
+    default: ""
+
+},
+
+
+/*
+|--------------------------------------------------------------------------
+| Social Media
+|--------------------------------------------------------------------------
+*/
+
+facebook: {
+
+    type: String,
+
+    default: ""
+
+},
+
+instagram: {
+
+    type: String,
+
+    default: ""
+
+},
+
+x: {
+
+    type: String,
+
+    default: ""
+
+},
+
+youtube: {
+
+    type: String,
+
+    default: ""
+
+},
+
+linkedin: {
+
+    type: String,
+
+    default: ""
+
+},
+
+tiktok: {
+
+    type: String,
+
+    default: ""
+
+},
+
+pinterest: {
+
+    type: String,
+
+    default: ""
+
+},
+
+
+/*
+|--------------------------------------------------------------------------
+| Working Hours
+|--------------------------------------------------------------------------
+*/
+
+workingHours: {
+
+    monday: {
+
+        open: {
+
+            type: String,
+
+            default: "09:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "18:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: true
+
+        }
+
+    },
+
+    tuesday: {
+
+        open: {
+
+            type: String,
+
+            default: "09:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "18:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: true
+
+        }
+
+    },
+
+    wednesday: {
+
+        open: {
+
+            type: String,
+
+            default: "09:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "18:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: true
+
+        }
+
+    },
+
+    thursday: {
+
+        open: {
+
+            type: String,
+
+            default: "09:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "18:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: true
+
+        }
+
+    },
+
+    friday: {
+
+        open: {
+
+            type: String,
+
+            default: "09:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "18:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: true
+
+        }
+
+    },
+
+    saturday: {
+
+        open: {
+
+            type: String,
+
+            default: "10:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "16:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: false
+
+        }
+
+    },
+
+    sunday: {
+
+        open: {
+
+            type: String,
+
+            default: "10:00"
+
+        },
+
+        close: {
+
+            type: String,
+
+            default: "16:00"
+
+        },
+
+        enabled: {
+
+            type: Boolean,
+
+            default: false
+
+        }
+
+    }
+
+},
+
+holidayMode: {
+
+    type: Boolean,
+
+    default: false
+
+        }
+
+/*
+|--------------------------------------------------------------------------
+| Indexes
+|--------------------------------------------------------------------------
+*/
+
+merchantSettingsSchema.index({
+
+    shop: 1
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Model
+|--------------------------------------------------------------------------
+*/
+
+const MerchantSettings = model(
+
+    "MerchantSettings",
+
+    merchantSettingsSchema
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Named Export
+|--------------------------------------------------------------------------
+*/
+
+export {
+
+    MerchantSettings
+
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Default Export
+|--------------------------------------------------------------------------
+*/
+
+export default MerchantSettings;
