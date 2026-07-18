@@ -1413,3 +1413,544 @@ async function updateHolidayMode(
     return settings;
 
 }
+/*
+|--------------------------------------------------------------------------
+| Reset Merchant Settings
+|--------------------------------------------------------------------------
+*/
+
+async function resetMerchantSettings(
+
+    shopId
+
+) {
+
+    await MerchantSettings.findOneAndDelete({
+
+        shop: shopId
+
+    });
+
+    return createDefaultSettings(
+
+        shopId
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Export Merchant Settings
+|--------------------------------------------------------------------------
+*/
+
+async function exportMerchantSettings(
+
+    shopId
+
+) {
+
+    const settings = await getMerchantSettings(
+
+        shopId
+
+    );
+
+    return settings.toObject();
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Import Merchant Settings
+|--------------------------------------------------------------------------
+*/
+
+async function importMerchantSettings(
+
+    shopId,
+
+    importedSettings
+
+) {
+
+    const settings = await getMerchantSettings(
+
+        shopId
+
+    );
+
+    delete importedSettings._id;
+
+    delete importedSettings.shop;
+
+    delete importedSettings.createdAt;
+
+    delete importedSettings.updatedAt;
+
+    Object.keys(
+
+        importedSettings
+
+    ).forEach(
+
+        key => {
+
+            settings[key] = importedSettings[key];
+
+        }
+
+    );
+
+    await settings.save();
+
+    return settings;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Duplicate Merchant Settings
+|--------------------------------------------------------------------------
+*/
+
+async function duplicateMerchantSettings(
+
+    sourceShopId,
+
+    destinationShopId
+
+) {
+
+    const source = await getMerchantSettings(
+
+        sourceShopId
+
+    );
+
+    let destination = await MerchantSettings.findOne({
+
+        shop: destinationShopId
+
+    });
+
+    if (
+
+        !destination
+
+    ) {
+
+        destination = await createDefaultSettings(
+
+            destinationShopId
+
+        );
+
+    }
+
+    const data = source.toObject();
+
+    delete data._id;
+
+    delete data.shop;
+
+    delete data.createdAt;
+
+    delete data.updatedAt;
+
+    Object.assign(
+
+        destination,
+
+        data
+
+    );
+
+    await destination.save();
+
+    return destination;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Delete Merchant Settings
+|--------------------------------------------------------------------------
+*/
+
+async function deleteMerchantSettings(
+
+    shopId
+
+) {
+
+    return MerchantSettings.findOneAndDelete({
+
+        shop: shopId
+
+    });
+
+}
+/*
+|--------------------------------------------------------------------------
+| Get Dashboard Configuration
+|--------------------------------------------------------------------------
+*/
+
+async function getDashboardConfiguration(
+
+    shopId
+
+) {
+
+    const settings = await getMerchantSettings(
+
+        shopId
+
+    );
+
+    return {
+
+        branding: {
+
+            storeName: settings.storeName,
+
+            chatbotHeader: settings.chatbotHeader,
+
+            companyName: settings.companyName,
+
+            logo: settings.logo,
+
+            favicon: settings.favicon
+
+        },
+
+        salesExecutive: {
+
+            name: settings.salesExecutiveName,
+
+            avatar: settings.avatar,
+
+            avatarType: settings.avatarType,
+
+            onlineStatus: settings.onlineStatus
+
+        },
+
+        appearance: {
+
+            themeColor: settings.themeColor,
+
+            headerColor: settings.headerColor,
+
+            backgroundColor: settings.backgroundColor,
+
+            textColor: settings.textColor,
+
+            accentColor: settings.accentColor,
+
+            fontFamily: settings.fontFamily,
+
+            fontSize: settings.fontSize,
+
+            borderRadius: settings.borderRadius,
+
+            widgetWidth: settings.widgetWidth,
+
+            widgetHeight: settings.widgetHeight,
+
+            chatPosition: settings.chatPosition
+
+        }
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Complete Widget Configuration
+|--------------------------------------------------------------------------
+*/
+
+async function getWidgetConfiguration(
+
+    shopId
+
+) {
+
+    const settings = await getMerchantSettings(
+
+        shopId
+
+    );
+
+    return {
+
+        ...await getPublicChatbotSettings(
+
+            shopId
+
+        ),
+
+        business: {
+
+            supportEmail: settings.supportEmail,
+
+            supportPhone: settings.supportPhone,
+
+            whatsappNumber: settings.whatsappNumber,
+
+            website: settings.website
+
+        },
+
+        social: {
+
+            facebook: settings.facebook,
+
+            instagram: settings.instagram,
+
+            x: settings.x,
+
+            youtube: settings.youtube,
+
+            linkedin: settings.linkedin
+
+        }
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Validate Public Configuration
+|--------------------------------------------------------------------------
+*/
+
+function validatePublicConfiguration(
+
+    settings
+
+) {
+
+    return (
+
+        settings.storeName &&
+
+        settings.salesExecutiveName &&
+
+        settings.chatbotHeader
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Merchant Settings Summary
+|--------------------------------------------------------------------------
+*/
+
+async function getMerchantSettingsSummary(
+
+    shopId
+
+) {
+
+    const settings = await getMerchantSettings(
+
+        shopId
+
+    );
+
+    return {
+
+        configured:
+
+            validatePublicConfiguration(
+
+                settings
+
+            ),
+
+        storeName:
+
+            settings.storeName,
+
+        salesExecutive:
+
+            settings.salesExecutiveName,
+
+        theme:
+
+            settings.themeColor,
+
+        language:
+
+            settings.language,
+
+        holidayMode:
+
+            settings.holidayMode
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Exports
+|--------------------------------------------------------------------------
+*/
+
+export {
+
+    createDefaultSettings,
+
+    getMerchantSettings,
+
+    getPublicChatbotSettings,
+
+    updateStoreBranding,
+
+    updateStoreName,
+
+    updateChatbotHeader,
+
+    updateLogo,
+
+    updateFavicon,
+
+    updateSalesExecutive,
+
+    updateAvatar,
+
+    updateAvatarType,
+
+    updateOnlineStatus,
+
+    updateTheme,
+
+    updateTypography,
+
+    updateWidgetLayout,
+
+    updateAnimationSettings,
+
+    updateWelcomeSettings,
+
+    updateCouponBanner,
+
+    updateCustomerExperience,
+
+    resetWelcomeSettings,
+
+    updateBusinessInformation,
+
+    updateSupportInformation,
+
+    updateSocialLinks,
+
+    updateWorkingHours,
+
+    updateHolidayMode,
+
+    resetMerchantSettings,
+
+    exportMerchantSettings,
+
+    importMerchantSettings,
+
+    duplicateMerchantSettings,
+
+    deleteMerchantSettings,
+
+    getDashboardConfiguration,
+
+    getWidgetConfiguration,
+
+    getMerchantSettingsSummary
+
+};
+
+
+export default {
+
+    createDefaultSettings,
+
+    getMerchantSettings,
+
+    getPublicChatbotSettings,
+
+    updateStoreBranding,
+
+    updateStoreName,
+
+    updateChatbotHeader,
+
+    updateLogo,
+
+    updateFavicon,
+
+    updateSalesExecutive,
+
+    updateAvatar,
+
+    updateAvatarType,
+
+    updateOnlineStatus,
+
+    updateTheme,
+
+    updateTypography,
+
+    updateWidgetLayout,
+
+    updateAnimationSettings,
+
+    updateWelcomeSettings,
+
+    updateCouponBanner,
+
+    updateCustomerExperience,
+
+    resetWelcomeSettings,
+
+    updateBusinessInformation,
+
+    updateSupportInformation,
+
+    updateSocialLinks,
+
+    updateWorkingHours,
+
+    updateHolidayMode,
+
+    resetMerchantSettings,
+
+    exportMerchantSettings,
+
+    importMerchantSettings,
+
+    duplicateMerchantSettings,
+
+    deleteMerchantSettings,
+
+    getDashboardConfiguration,
+
+    getWidgetConfiguration,
+
+    getMerchantSettingsSummary
+
+};
