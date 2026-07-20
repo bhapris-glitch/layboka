@@ -1,13 +1,153 @@
+/*
+|--------------------------------------------------------------------------
+| Layboka AI
+|--------------------------------------------------------------------------
+| Express Application
+|--------------------------------------------------------------------------
+|
+| Configures the Express application.
+| This file does NOT start the HTTP server.
+| Server startup is handled by server.js.
+|
+|--------------------------------------------------------------------------
+*/
+
 import express from "express";
-import cors from "cors";
+
+import path from "path";
+
+import { fileURLToPath } from "url";
+
+
+/*
+|--------------------------------------------------------------------------
+| Third-Party Middleware
+|--------------------------------------------------------------------------
+*/
+
 import helmet from "helmet";
+
+import cors from "cors";
+
 import compression from "compression";
+
 import cookieParser from "cookie-parser";
-import mongoSanitize from "express-mongo-sanitize";
-import hpp from "hpp";
+
 import morgan from "morgan";
 
+import hpp from "hpp";
+
+import mongoSanitize from "express-mongo-sanitize";
+
+
+/*
+|--------------------------------------------------------------------------
+| Internal Modules
+|--------------------------------------------------------------------------
+*/
+
+import logger from "./utils/logger.js";
+
+import apiRoutes from "./routes/index.js";
+
+import notFound from "./middleware/notFound.js";
+
+import errorHandler from "./middleware/errorHandler.js";
+
+
+/*
+|--------------------------------------------------------------------------
+| Express Application
+|--------------------------------------------------------------------------
+*/
+
 const app = express();
+
+
+/*
+|--------------------------------------------------------------------------
+| Path Configuration
+|--------------------------------------------------------------------------
+*/
+
+const __filename =
+
+    fileURLToPath(
+
+        import.meta.url
+
+    );
+
+const __dirname =
+
+    path.dirname(
+
+        __filename
+
+    );
+
+const ROOT_DIRECTORY =
+
+    path.resolve(
+
+        __dirname,
+
+        ".."
+
+    );
+
+const PUBLIC_DIRECTORY =
+
+    path.join(
+
+        ROOT_DIRECTORY,
+
+        "public"
+
+    );
+
+const UPLOAD_DIRECTORY =
+
+    path.join(
+
+        ROOT_DIRECTORY,
+
+        "uploads"
+
+    );
+
+
+/*
+|--------------------------------------------------------------------------
+| Startup Log
+|--------------------------------------------------------------------------
+*/
+
+logger.info(
+
+    "Initializing Express application..."
+
+);
+/*
+|--------------------------------------------------------------------------
+| Express Configuration
+|--------------------------------------------------------------------------
+*/
+
+app.disable(
+
+    "x-powered-by"
+
+);
+
+app.set(
+
+    "trust proxy",
+
+    1
+
+);
+
 
 /*
 |--------------------------------------------------------------------------
@@ -16,130 +156,378 @@ const app = express();
 */
 
 app.use(
-  helmet({
-    crossOriginResourcePolicy: false
-  })
+
+    helmet({
+
+        crossOriginResourcePolicy: {
+
+            policy: "cross-origin"
+
+        }
+
+    })
+
 );
 
 app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN?.split(",") || [
-      "http://localhost:3000"
-    ],
-    credentials: true
-  })
+
+    cors({
+
+        origin:
+
+            process.env.CORS_ORIGIN
+
+                ? process.env.CORS_ORIGIN
+
+                    .split(",")
+
+                    .map(
+
+                        origin => origin.trim()
+
+                    )
+
+                : "*",
+
+        credentials: true,
+
+        methods: [
+
+            "GET",
+
+            "POST",
+
+            "PUT",
+
+            "PATCH",
+
+            "DELETE",
+
+            "OPTIONS"
+
+        ],
+
+        allowedHeaders: [
+
+            "Content-Type",
+
+            "Authorization",
+
+            "X-Shopify-Shop-Domain",
+
+            "X-Shopify-Hmac-Sha256",
+
+            "X-Shopify-Access-Token"
+
+        ]
+
+    })
+
 );
 
-app.use(compression());
-
-app.use(cookieParser());
-
-app.use(
-  express.json({
-    limit: "10mb"
-  })
-);
-
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "10mb"
-  })
-);
-
-app.use(mongoSanitize());
-
-app.use(hpp());
 
 /*
 |--------------------------------------------------------------------------
-| Logging
+| Performance Middleware
 |--------------------------------------------------------------------------
 */
 
-if (process.env.NODE_ENV !== "production") {
-  app.use(morgan("dev"));
-} else {
-  app.use(morgan("combined"));
+app.use(
+
+    compression()
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Cookie Middleware
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+
+    cookieParser(
+
+        process.env.COOKIE_SECRET
+
+    )
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Request Security
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+
+    mongoSanitize()
+
+);
+
+app.use(
+
+    hpp({
+
+        whitelist: [
+
+            "sort",
+
+            "fields",
+
+            "page",
+
+            "limit",
+
+            "search"
+
+        ]
+
+    })
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| HTTP OPTIONS
+|--------------------------------------------------------------------------
+*/
+
+app.options(
+
+    "*",
+
+    cors()
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Security Log
+|--------------------------------------------------------------------------
+*/
+
+logger.info(
+
+    "Security middleware registered."
+
+);
+/*
+|--------------------------------------------------------------------------
+| HTTP Request Logging
+|--------------------------------------------------------------------------
+*/
+
+if (
+
+    process.env.NODE_ENV === "development"
+
+) {
+
+    app.use(
+
+        morgan(
+
+            "dev"
+
+        )
+
+    );
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| Health Check
-|--------------------------------------------------------------------------
-*/
+else {
 
-app.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    service: "Layboka API",
-    status: "healthy",
-    timestamp: new Date().toISOString()
-  });
-});
+    app.use(
 
-/*
-|--------------------------------------------------------------------------
-| API Root
-|--------------------------------------------------------------------------
-*/
+        morgan(
 
-app.get("/api/v1", (req, res) => {
-  res.status(200).json({
-    success: true,
-    name: "Layboka API",
-    version: "1.0.0",
-    environment: process.env.NODE_ENV
-  });
-});
+            "combined",
 
-/*
-|--------------------------------------------------------------------------
-| Routes
-|--------------------------------------------------------------------------
-*/
+            {
 
-app.use("/api/v1/auth", (req, res) => {
-  res.json({
-    message: "Auth route ready"
-  });
-});
+                stream: {
 
-app.use("/api/v1/shopify", (req, res) => {
-  res.json({
-    message: "Shopify route ready"
-  });
-});
+                    write: (message) =>
 
-app.use("/api/v1/chat", (req, res) => {
-  res.json({
-    message: "Chat route ready"
-  });
-});
+                        logger.info(
 
-app.use("/api/v1/subscriptions", (req, res) => {
-  res.json({
-    message: "Subscription route ready"
-  });
-});
+                            message.trim()
 
-app.use("/api/v1/analytics", (req, res) => {
-  res.json({
-    message: "Analytics route ready"
-  });
-});
+                        )
+
+                }
+
+            }
+
+        )
+
+    );
+
+}
+
 
 /*
 |--------------------------------------------------------------------------
-| 404 Handler
+| Request Body Parsers
 |--------------------------------------------------------------------------
 */
 
-app.use("*", (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.originalUrl}`
-  });
-});
+app.use(
 
-export default app;
+    express.json({
+
+        limit:
+
+            process.env.JSON_LIMIT ||
+
+            "10mb"
+
+    })
+
+);
+
+app.use(
+
+    express.urlencoded({
+
+        extended: true,
+
+        limit:
+
+            process.env.URL_ENCODED_LIMIT ||
+
+            "10mb"
+
+    })
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Static Files
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+
+    "/public",
+
+    express.static(
+
+        PUBLIC_DIRECTORY
+
+    )
+
+);
+
+app.use(
+
+    "/uploads",
+
+    express.static(
+
+        UPLOAD_DIRECTORY
+
+    )
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Response Headers
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+
+    (
+
+        req,
+
+        res,
+
+        next
+
+    ) => {
+
+        res.setHeader(
+
+            "X-App-Name",
+
+            "Layboka AI"
+
+        );
+
+        res.setHeader(
+
+            "X-App-Version",
+
+            "1.0.0"
+
+        );
+
+        res.setHeader(
+
+            "X-Content-Type-Options",
+
+            "nosniff"
+
+        );
+
+        next();
+
+    }
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Request Logger
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+
+    (
+
+        req,
+
+        res,
+
+        next
+
+    ) => {
+
+        logger.debug(
+
+            `${req.method} ${req.originalUrl}`
+
+        );
+
+        next();
+
+    }
+
+);
+
+
+/*
+|--------------------------------------------------------------------------
+| Middleware Log
+|--------------------------------------------------------------------------
+*/
+
+logger.info(
+
+    "Application middleware registered."
+
+);
