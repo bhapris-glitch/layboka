@@ -37,11 +37,19 @@ import {
 
 import {
 
-    activateSubscription,
+    activateTrial,
 
     cancelSubscription,
 
-    expireTrial
+    expireSubscription,
+
+    handleSubscriptionUpdated,
+
+    handleSubscriptionDeleted,
+
+    handlePaymentSuccess,
+
+    handlePaymentFailure
 
 } from "../subscription/subscription.service.js";
 
@@ -1000,13 +1008,11 @@ async function handleSubscriptionUpdated(
 
         const subscription =
 
-            await activateSubscription(
+    await handleSubscriptionUpdated(
 
-                shop,
+        payload
 
-                payload
-
-            );
+    );
 
         await createPaymentSuccessNotification(
 
