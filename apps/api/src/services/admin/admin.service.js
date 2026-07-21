@@ -5,17 +5,22 @@
 | Admin Service
 |--------------------------------------------------------------------------
 |
-| Provides administrative operations for the Layboka SaaS platform.
+| Central service layer for administrative operations across the
+| Layboka AI SaaS platform.
 |
-| Responsibilities include:
+| Responsibilities:
 |
-| • Admin dashboard data
-| • Merchant management
-| • Subscription monitoring
-| • Revenue monitoring
-| • System statistics
-| • User management
-| • Platform-level administration
+| - Platform overview
+| - Dashboard statistics
+| - Merchant management
+| - Shop management
+| - Subscription management
+| - Revenue statistics
+| - Order statistics
+| - Product statistics
+| - Customer statistics
+| - Admin user management
+| - Platform activity
 |
 |--------------------------------------------------------------------------
 */
@@ -32,16 +37,6 @@ import Product from "../../models/Product.js";
 
 import Customer from "../../models/Customer.js";
 
-import Analytics from "../../models/Analytics.js";
-
-import Conversation from "../../models/Conversation.js";
-
-import Invoice from "../../models/Invoice.js";
-
-import EnterpriseLead from "../../models/EnterpriseLead.js";
-
-import Notification from "../../models/notification.model.js";
-
 import logger from "../../utils/logger.js";
 
 
@@ -55,6 +50,7 @@ const ADMIN_SERVICE_NAME =
 
     "Layboka Admin Service";
 
+
 const ADMIN_SERVICE_VERSION =
 
     "1.0.0";
@@ -62,7 +58,7 @@ const ADMIN_SERVICE_VERSION =
 
 /*
 |--------------------------------------------------------------------------
-| Pagination Defaults
+| Pagination Configuration
 |--------------------------------------------------------------------------
 */
 
@@ -90,7 +86,125 @@ export const ADMIN_ROLES = Object.freeze({
 
 /*
 |--------------------------------------------------------------------------
-| Admin Service Startup
+| User Roles
+|--------------------------------------------------------------------------
+*/
+
+export const USER_ROLES = Object.freeze({
+
+    MERCHANT: "merchant",
+
+    ADMIN: "admin",
+
+    SUPER_ADMIN: "super_admin"
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Subscription Plans
+|--------------------------------------------------------------------------
+*/
+
+export const SUBSCRIPTION_PLANS = Object.freeze({
+
+    STARTER: "starter",
+
+    GROWTH: "growth",
+
+    PREMIUM: "premium",
+
+    ENTERPRISE: "enterprise"
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Subscription Statuses
+|--------------------------------------------------------------------------
+*/
+
+export const SUBSCRIPTION_STATUS = Object.freeze({
+
+    TRIAL: "trial",
+
+    ACTIVE: "active",
+
+    PAST_DUE: "past_due",
+
+    CANCELLED: "cancelled",
+
+    EXPIRED: "expired",
+
+    PAUSED: "paused"
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Trial Configuration
+|--------------------------------------------------------------------------
+|
+| Layboka official free trial duration:
+|
+| 5 Days
+|
+|--------------------------------------------------------------------------
+*/
+
+export const TRIAL_DURATION_DAYS = 5;
+
+
+/*
+|--------------------------------------------------------------------------
+| Plan Pricing
+|--------------------------------------------------------------------------
+|
+| Monthly USD pricing.
+|
+| Enterprise is handled through Contact Sales.
+|
+|--------------------------------------------------------------------------
+*/
+
+export const PLAN_PRICING = Object.freeze({
+
+    starter: 25,
+
+    growth: 59,
+
+    premium: 149,
+
+    enterprise: 0
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| AI Model Mapping
+|--------------------------------------------------------------------------
+*/
+
+export const PLAN_AI_MODELS = Object.freeze({
+
+    starter: "gpt-4o-mini",
+
+    growth: "gpt-4o-mini",
+
+    premium: "gpt-5",
+
+    enterprise: "gpt-5"
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Admin Service Startup Logger
 |--------------------------------------------------------------------------
 */
 
@@ -102,7 +216,27 @@ logger.info(
 
         version:
 
-            ADMIN_SERVICE_VERSION
+            ADMIN_SERVICE_VERSION,
+
+        trialDurationDays:
+
+            TRIAL_DURATION_DAYS,
+
+        plans:
+
+            Object.values(
+
+                SUBSCRIPTION_PLANS
+
+            ),
+
+        roles:
+
+            Object.values(
+
+                USER_ROLES
+
+            )
 
     }
 
@@ -110,6 +244,10 @@ logger.info(
 /*
 |--------------------------------------------------------------------------
 | Get Platform Overview
+|--------------------------------------------------------------------------
+|
+| Returns a high-level summary of the entire Layboka platform.
+|
 |--------------------------------------------------------------------------
 */
 
@@ -123,72 +261,126 @@ export const getPlatformOverview = async () => {
 
             totalMerchants,
 
+            totalAdmins,
+
+            totalSuperAdmins,
+
             totalShops,
+
+            installedShops,
+
+            activeShops,
 
             totalSubscriptions,
 
             activeSubscriptions,
 
+            trialSubscriptions,
+
             totalOrders,
 
             totalProducts,
 
-            totalCustomers,
-
-            totalConversations,
-
-            totalEnterpriseLeads
+            totalCustomers
 
         ] = await Promise.all([
+
+            /*
+            |--------------------------------------------------------------------------
+            | Users
+            |--------------------------------------------------------------------------
+            */
 
             User.countDocuments(),
 
             User.countDocuments({
 
-                role: "merchant"
+                role:
+
+                    USER_ROLES.MERCHANT
 
             }),
 
+            User.countDocuments({
+
+                role:
+
+                    USER_ROLES.ADMIN
+
+            }),
+
+            User.countDocuments({
+
+                role:
+
+                    USER_ROLES.SUPER_ADMIN
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shops
+            |--------------------------------------------------------------------------
+            */
+
             Shop.countDocuments(),
 
-            Subscription.countDocuments(),
+            Shop.countDocuments({
 
-            Subscription.countDocuments({
+                isInstalled: true
+
+            }),
+
+            Shop.countDocuments({
 
                 status: "active"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Subscriptions
+            |--------------------------------------------------------------------------
+            */
+
+            Subscription.countDocuments(),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.ACTIVE
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.TRIAL
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Commerce
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments(),
 
             Product.countDocuments(),
 
-            Customer.countDocuments(),
+            Customer.countDocuments({
 
-            Conversation.countDocuments(),
+                deleted: false
 
-            EnterpriseLead.countDocuments()
+            })
 
         ]);
-
-
-        logger.info(
-
-            "Admin platform overview generated.",
-
-            {
-
-                totalUsers,
-
-                totalMerchants,
-
-                totalShops,
-
-                totalSubscriptions
-
-            }
-
-        );
 
 
         return {
@@ -201,7 +393,15 @@ export const getPlatformOverview = async () => {
 
                 merchants:
 
-                    totalMerchants
+                    totalMerchants,
+
+                admins:
+
+                    totalAdmins,
+
+                superAdmins:
+
+                    totalSuperAdmins
 
             },
 
@@ -209,7 +409,15 @@ export const getPlatformOverview = async () => {
 
                 total:
 
-                    totalShops
+                    totalShops,
+
+                installed:
+
+                    installedShops,
+
+                active:
+
+                    activeShops
 
             },
 
@@ -221,209 +429,11 @@ export const getPlatformOverview = async () => {
 
                 active:
 
-                    activeSubscriptions
-
-            },
-
-            commerce: {
-
-                orders:
-
-                    totalOrders,
-
-                products:
-
-                    totalProducts,
-
-                customers:
-
-                    totalCustomers
-
-            },
-
-            engagement: {
-
-                conversations:
-
-                    totalConversations
-
-            },
-
-            enterprise: {
-
-                leads:
-
-                    totalEnterpriseLeads
-
-            }
-
-        };
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to generate platform overview.",
-
-            {
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Admin Dashboard Statistics
-|--------------------------------------------------------------------------
-*/
-
-export const getDashboardStatistics = async () => {
-
-    try {
-
-        const [
-
-            totalUsers,
-
-            activeUsers,
-
-            totalMerchants,
-
-            totalShops,
-
-            activeShops,
-
-            activeSubscriptions,
-
-            trialSubscriptions,
-
-            cancelledSubscriptions,
-
-            expiredSubscriptions,
-
-            totalOrders,
-
-            totalProducts,
-
-            totalCustomers
-
-        ] = await Promise.all([
-
-            User.countDocuments(),
-
-            User.countDocuments({
-
-                isActive: true
-
-            }),
-
-            User.countDocuments({
-
-                role: "merchant"
-
-            }),
-
-            Shop.countDocuments(),
-
-            Shop.countDocuments({
-
-                installed: true
-
-            }),
-
-            Subscription.countDocuments({
-
-                status: "active"
-
-            }),
-
-            Subscription.countDocuments({
-
-                status: "trial"
-
-            }),
-
-            Subscription.countDocuments({
-
-                status: "cancelled"
-
-            }),
-
-            Subscription.countDocuments({
-
-                status: "expired"
-
-            }),
-
-            Order.countDocuments(),
-
-            Product.countDocuments(),
-
-            Customer.countDocuments()
-
-        ]);
-
-
-        return {
-
-            users: {
-
-                total:
-
-                    totalUsers,
-
-                active:
-
-                    activeUsers,
-
-                merchants:
-
-                    totalMerchants
-
-            },
-
-            shops: {
-
-                total:
-
-                    totalShops,
-
-                active:
-
-                    activeShops
-
-            },
-
-            subscriptions: {
-
-                active:
-
                     activeSubscriptions,
 
                 trial:
 
-                    trialSubscriptions,
-
-                cancelled:
-
-                    cancelledSubscriptions,
-
-                expired:
-
-                    expiredSubscriptions
+                    trialSubscriptions
 
             },
 
@@ -455,13 +465,489 @@ export const getDashboardStatistics = async () => {
 
         logger.error(
 
+            "Failed to generate platform overview.",
+
+            {
+
+                error:
+
+                    error.message,
+
+                stack:
+
+                    error.stack
+
+            }
+
+        );
+
+        throw error;
+
+    }
+
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Admin Dashboard Statistics
+|--------------------------------------------------------------------------
+|
+| Provides the main statistics used by the Admin Dashboard.
+|
+|--------------------------------------------------------------------------
+*/
+
+export const getDashboardStatistics = async () => {
+
+    try {
+
+        const [
+
+            totalUsers,
+
+            activeUsers,
+
+            inactiveUsers,
+
+            totalMerchants,
+
+            totalShops,
+
+            installedShops,
+
+            activeShops,
+
+            inactiveShops,
+
+            suspendedShops,
+
+            totalSubscriptions,
+
+            trialSubscriptions,
+
+            activeSubscriptions,
+
+            pastDueSubscriptions,
+
+            cancelledSubscriptions,
+
+            expiredSubscriptions,
+
+            pausedSubscriptions,
+
+            totalOrders,
+
+            paidOrders,
+
+            cancelledOrders,
+
+            refundedOrders,
+
+            totalProducts,
+
+            activeProducts,
+
+            draftProducts,
+
+            archivedProducts,
+
+            totalCustomers,
+
+            activeCustomers,
+
+            inactiveCustomers,
+
+            marketingOptInCustomers,
+
+            deletedCustomers
+
+        ] = await Promise.all([
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Users
+            |--------------------------------------------------------------------------
+            */
+
+            User.countDocuments(),
+
+            User.countDocuments({
+
+                isActive: true
+
+            }),
+
+            User.countDocuments({
+
+                isActive: false
+
+            }),
+
+            User.countDocuments({
+
+                role:
+
+                    USER_ROLES.MERCHANT
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shops
+            |--------------------------------------------------------------------------
+            */
+
+            Shop.countDocuments(),
+
+            Shop.countDocuments({
+
+                isInstalled: true
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "active"
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "inactive"
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "suspended"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Subscriptions
+            |--------------------------------------------------------------------------
+            */
+
+            Subscription.countDocuments(),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.TRIAL
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.ACTIVE
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.PAST_DUE
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.CANCELLED
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.EXPIRED
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.PAUSED
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Orders
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments(),
+
+            Order.countDocuments({
+
+                orderStatus: "paid"
+
+            }),
+
+            Order.countDocuments({
+
+                orderStatus: "cancelled"
+
+            }),
+
+            Order.countDocuments({
+
+                orderStatus: "refunded"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Products
+            |--------------------------------------------------------------------------
+            */
+
+            Product.countDocuments(),
+
+            Product.countDocuments({
+
+                status: "active"
+
+            }),
+
+            Product.countDocuments({
+
+                status: "draft"
+
+            }),
+
+            Product.countDocuments({
+
+                status: "archived"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Customers
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                deleted: false
+
+            }),
+
+            Customer.countDocuments({
+
+                status: "active",
+
+                deleted: false
+
+            }),
+
+            Customer.countDocuments({
+
+                status: "inactive",
+
+                deleted: false
+
+            }),
+
+            Customer.countDocuments({
+
+                acceptsMarketing: true,
+
+                deleted: false
+
+            }),
+
+            Customer.countDocuments({
+
+                deleted: true
+
+            })
+
+        ]);
+
+
+        return {
+
+            users: {
+
+                total:
+
+                    totalUsers,
+
+                active:
+
+                    activeUsers,
+
+                inactive:
+
+                    inactiveUsers,
+
+                merchants:
+
+                    totalMerchants
+
+            },
+
+            shops: {
+
+                total:
+
+                    totalShops,
+
+                installed:
+
+                    installedShops,
+
+                active:
+
+                    activeShops,
+
+                inactive:
+
+                    inactiveShops,
+
+                suspended:
+
+                    suspendedShops
+
+            },
+
+            subscriptions: {
+
+                total:
+
+                    totalSubscriptions,
+
+                trial:
+
+                    trialSubscriptions,
+
+                active:
+
+                    activeSubscriptions,
+
+                pastDue:
+
+                    pastDueSubscriptions,
+
+                cancelled:
+
+                    cancelledSubscriptions,
+
+                expired:
+
+                    expiredSubscriptions,
+
+                paused:
+
+                    pausedSubscriptions
+
+            },
+
+            orders: {
+
+                total:
+
+                    totalOrders,
+
+                paid:
+
+                    paidOrders,
+
+                cancelled:
+
+                    cancelledOrders,
+
+                refunded:
+
+                    refundedOrders
+
+            },
+
+            products: {
+
+                total:
+
+                    totalProducts,
+
+                active:
+
+                    activeProducts,
+
+                draft:
+
+                    draftProducts,
+
+                archived:
+
+                    archivedProducts
+
+            },
+
+            customers: {
+
+                total:
+
+                    totalCustomers,
+
+                active:
+
+                    activeCustomers,
+
+                inactive:
+
+                    inactiveCustomers,
+
+                marketingOptIn:
+
+                    marketingOptInCustomers,
+
+                deleted:
+
+                    deletedCustomers
+
+            },
+
+            generatedAt:
+
+                new Date()
+
+        };
+
+    }
+
+    catch (error) {
+
+        logger.error(
+
             "Failed to generate admin dashboard statistics.",
 
             {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -492,21 +978,25 @@ export const getMerchantStatistics = async () => {
 
             inactive,
 
-            admins,
+            emailVerified,
 
-            superAdmins
+            emailUnverified
 
         ] = await Promise.all([
 
             User.countDocuments({
 
-                role: "merchant"
+                role:
+
+                    USER_ROLES.MERCHANT
 
             }),
 
             User.countDocuments({
 
-                role: "merchant",
+                role:
+
+                    USER_ROLES.MERCHANT,
 
                 isActive: true
 
@@ -514,7 +1004,9 @@ export const getMerchantStatistics = async () => {
 
             User.countDocuments({
 
-                role: "merchant",
+                role:
+
+                    USER_ROLES.MERCHANT,
 
                 isActive: false
 
@@ -522,13 +1014,21 @@ export const getMerchantStatistics = async () => {
 
             User.countDocuments({
 
-                role: "admin"
+                role:
+
+                    USER_ROLES.MERCHANT,
+
+                isEmailVerified: true
 
             }),
 
             User.countDocuments({
 
-                role: "super_admin"
+                role:
+
+                    USER_ROLES.MERCHANT,
+
+                isEmailVerified: false
 
             })
 
@@ -543,9 +1043,9 @@ export const getMerchantStatistics = async () => {
 
             inactive,
 
-            admins,
+            emailVerified,
 
-            superAdmins
+            emailUnverified
 
         };
 
@@ -561,7 +1061,111 @@ export const getMerchantStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
+
+            }
+
+        );
+
+        throw error;
+
+    }
+
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Shop Statistics
+|--------------------------------------------------------------------------
+*/
+
+export const getShopStatistics = async () => {
+
+    try {
+
+        const [
+
+            total,
+
+            installed,
+
+            active,
+
+            inactive,
+
+            suspended
+
+        ] = await Promise.all([
+
+            Shop.countDocuments(),
+
+            Shop.countDocuments({
+
+                isInstalled: true
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "active"
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "inactive"
+
+            }),
+
+            Shop.countDocuments({
+
+                status: "suspended"
+
+            })
+
+        ]);
+
+
+        return {
+
+            total,
+
+            installed,
+
+            notInstalled:
+
+                total - installed,
+
+            active,
+
+            inactive,
+
+            suspended
+
+        };
+
+    }
+
+    catch (error) {
+
+        logger.error(
+
+            "Failed to generate shop statistics.",
+
+            {
+
+                error:
+
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -588,15 +1192,17 @@ export const getSubscriptionStatistics = async () => {
 
             total,
 
+            trial,
+
             active,
 
-            trial,
+            pastDue,
 
             cancelled,
 
             expired,
 
-            pastDue
+            paused
 
         ] = await Promise.all([
 
@@ -604,31 +1210,49 @@ export const getSubscriptionStatistics = async () => {
 
             Subscription.countDocuments({
 
-                status: "active"
+                status:
+
+                    SUBSCRIPTION_STATUS.TRIAL
 
             }),
 
             Subscription.countDocuments({
 
-                status: "trial"
+                status:
+
+                    SUBSCRIPTION_STATUS.ACTIVE
 
             }),
 
             Subscription.countDocuments({
 
-                status: "cancelled"
+                status:
+
+                    SUBSCRIPTION_STATUS.PAST_DUE
 
             }),
 
             Subscription.countDocuments({
 
-                status: "expired"
+                status:
+
+                    SUBSCRIPTION_STATUS.CANCELLED
 
             }),
 
             Subscription.countDocuments({
 
-                status: "past_due"
+                status:
+
+                    SUBSCRIPTION_STATUS.EXPIRED
+
+            }),
+
+            Subscription.countDocuments({
+
+                status:
+
+                    SUBSCRIPTION_STATUS.PAUSED
 
             })
 
@@ -639,15 +1263,17 @@ export const getSubscriptionStatistics = async () => {
 
             total,
 
+            trial,
+
             active,
 
-            trial,
+            pastDue,
 
             cancelled,
 
             expired,
 
-            pastDue
+            paused
 
         };
 
@@ -663,7 +1289,11 @@ export const getSubscriptionStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -678,17 +1308,46 @@ export const getSubscriptionStatistics = async () => {
 |--------------------------------------------------------------------------
 | Get Revenue Statistics
 |--------------------------------------------------------------------------
+|
+| Calculates platform-wide revenue from paid Shopify orders.
+|
+| Revenue source:
+|
+| Order.totalPrice
+|
+| Payment status:
+|
+| financialStatus
+|
+| Refunds are tracked separately using:
+|
+| Order.totalRefunded
+|
+|--------------------------------------------------------------------------
 */
 
 export const getRevenueStatistics = async () => {
 
     try {
 
-        const revenueResult =
+        const [
 
-            await Order.aggregate([
+            revenueResult,
+
+            refundedResult
+
+        ] = await Promise.all([
+
+            /*
+            |--------------------------------------------------------------------------
+            | Paid Revenue
+            |--------------------------------------------------------------------------
+            */
+
+            Order.aggregate([
 
                 {
+
                     $match: {
 
                         financialStatus: {
@@ -713,7 +1372,7 @@ export const getRevenueStatistics = async () => {
 
                         _id: null,
 
-                        totalRevenue: {
+                        grossRevenue: {
 
                             $sum: {
 
@@ -749,43 +1408,182 @@ export const getRevenueStatistics = async () => {
 
                             }
 
+                        },
+
+                        totalRefunded: {
+
+                            $sum: {
+
+                                $ifNull: [
+
+                                    "$totalRefunded",
+
+                                    0
+
+                                ]
+
+                            }
+
                         }
 
                     }
 
                 }
 
-            ]);
+            ]),
 
 
-        const result =
+            /*
+            |--------------------------------------------------------------------------
+            | Refunded Orders
+            |--------------------------------------------------------------------------
+            */
 
-            revenueResult[0] ||
+            Order.aggregate([
 
-            {
+                {
 
-                totalRevenue: 0,
+                    $match: {
+
+                        orderStatus:
+
+                            "refunded"
+
+                    }
+
+                },
+
+                {
+
+                    $group: {
+
+                        _id: null,
+
+                        refundedOrders: {
+
+                            $sum: 1
+
+                        },
+
+                        refundedAmount: {
+
+                            $sum: {
+
+                                $ifNull: [
+
+                                    "$totalRefunded",
+
+                                    0
+
+                                ]
+
+                            }
+
+                        }
+
+                    }
+
+                }
+
+            ])
+
+        ]);
+
+
+        const revenue =
+
+            revenueResult[0] || {
+
+                grossRevenue: 0,
 
                 totalOrders: 0,
 
-                averageOrderValue: 0
+                averageOrderValue: 0,
+
+                totalRefunded: 0
 
             };
 
 
+        const refunds =
+
+            refundedResult[0] || {
+
+                refundedOrders: 0,
+
+                refundedAmount: 0
+
+            };
+
+
+        const netRevenue =
+
+            Math.max(
+
+                Number(
+
+                    revenue.grossRevenue || 0
+
+                ) -
+
+                Number(
+
+                    revenue.totalRefunded || 0
+
+                ),
+
+                0
+
+            );
+
+
         return {
 
-            totalRevenue:
+            grossRevenue:
 
-                result.totalRevenue,
+                Number(
+
+                    revenue.grossRevenue || 0
+
+                ),
+
+            totalRefunded:
+
+                Number(
+
+                    revenue.totalRefunded || 0
+
+                ),
+
+            netRevenue,
 
             totalOrders:
 
-                result.totalOrders,
+                revenue.totalOrders || 0,
 
             averageOrderValue:
 
-                result.averageOrderValue
+                Number(
+
+                    revenue.averageOrderValue || 0
+
+                ),
+
+            refundedOrders:
+
+                refunds.refundedOrders || 0,
+
+            refundedAmount:
+
+                Number(
+
+                    refunds.refundedAmount || 0
+
+                ),
+
+            generatedAt:
+
+                new Date()
 
         };
 
@@ -801,7 +1599,11 @@ export const getRevenueStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -828,43 +1630,164 @@ export const getOrderStatistics = async () => {
 
             total,
 
+            pending,
+
+            authorized,
+
             paid,
 
-            pending,
+            partiallyPaid,
+
+            fulfilled,
+
+            partiallyFulfilled,
 
             cancelled,
 
-            refunded
+            refunded,
+
+            aiInfluenced
 
         ] = await Promise.all([
 
+            /*
+            |--------------------------------------------------------------------------
+            | Total
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments(),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Pending
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments({
 
-                financialStatus: "paid"
+                orderStatus:
+
+                    "pending"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Authorized
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments({
 
-                financialStatus: "pending"
+                orderStatus:
+
+                    "authorized"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Paid
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments({
 
-                cancelledAt: {
+                orderStatus:
 
-                    $ne: null
-
-                }
+                    "paid"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Partially Paid
+            |--------------------------------------------------------------------------
+            */
+
             Order.countDocuments({
 
-                financialStatus: "refunded"
+                orderStatus:
+
+                    "partially_paid"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Fulfilled
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments({
+
+                orderStatus:
+
+                    "fulfilled"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Partially Fulfilled
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments({
+
+                orderStatus:
+
+                    "partially_fulfilled"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Cancelled
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments({
+
+                orderStatus:
+
+                    "cancelled"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Refunded
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments({
+
+                orderStatus:
+
+                    "refunded"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | AI Influenced
+            |--------------------------------------------------------------------------
+            */
+
+            Order.countDocuments({
+
+                aiInfluenced: true
 
             })
 
@@ -875,13 +1798,23 @@ export const getOrderStatistics = async () => {
 
             total,
 
+            pending,
+
+            authorized,
+
             paid,
 
-            pending,
+            partiallyPaid,
+
+            fulfilled,
+
+            partiallyFulfilled,
 
             cancelled,
 
-            refunded
+            refunded,
+
+            aiInfluenced
 
         };
 
@@ -897,7 +1830,11 @@ export const getOrderStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -928,27 +1865,109 @@ export const getProductStatistics = async () => {
 
             draft,
 
-            archived
+            archived,
+
+            availableForSale,
+
+            outOfStock,
+
+            embeddingGenerated
 
         ] = await Promise.all([
 
+            /*
+            |--------------------------------------------------------------------------
+            | Total Products
+            |--------------------------------------------------------------------------
+            */
+
             Product.countDocuments(),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Active Products
+            |--------------------------------------------------------------------------
+            */
+
             Product.countDocuments({
 
-                status: "active"
+                status:
+
+                    "active"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Draft Products
+            |--------------------------------------------------------------------------
+            */
+
             Product.countDocuments({
 
-                status: "draft"
+                status:
+
+                    "draft"
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Archived Products
+            |--------------------------------------------------------------------------
+            */
+
             Product.countDocuments({
 
-                status: "archived"
+                status:
+
+                    "archived"
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Available For Sale
+            |--------------------------------------------------------------------------
+            */
+
+            Product.countDocuments({
+
+                availableForSale: true
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Out Of Stock
+            |--------------------------------------------------------------------------
+            */
+
+            Product.countDocuments({
+
+                inventory: {
+
+                    $lte: 0
+
+                }
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | AI Embeddings
+            |--------------------------------------------------------------------------
+            */
+
+            Product.countDocuments({
+
+                embeddingGenerated: true
 
             })
 
@@ -963,7 +1982,13 @@ export const getProductStatistics = async () => {
 
             draft,
 
-            archived
+            archived,
+
+            availableForSale,
+
+            outOfStock,
+
+            embeddingGenerated
 
         };
 
@@ -979,7 +2004,11 @@ export const getProductStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1008,29 +2037,212 @@ export const getCustomerStatistics = async () => {
 
             active,
 
-            subscribed,
+            inactive,
 
-            guests
+            enabled,
+
+            disabled,
+
+            invited,
+
+            declined,
+
+            marketingOptIn,
+
+            marketingOptOut,
+
+            deleted,
+
+            aiOptIn,
+
+            gdprConsent
 
         ] = await Promise.all([
 
-            Customer.countDocuments(),
+            /*
+            |--------------------------------------------------------------------------
+            | Active Customers In Database
+            |--------------------------------------------------------------------------
+            */
 
             Customer.countDocuments({
 
-                isActive: true
+                deleted: false
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Active Status
+            |--------------------------------------------------------------------------
+            */
+
             Customer.countDocuments({
 
-                acceptsMarketing: true
+                status:
+
+                    "active",
+
+                deleted: false
 
             }),
 
+
+            /*
+            |--------------------------------------------------------------------------
+            | Inactive Status
+            |--------------------------------------------------------------------------
+            */
+
             Customer.countDocuments({
 
-                acceptsMarketing: false
+                status:
+
+                    "inactive",
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shopify Enabled State
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                state:
+
+                    "enabled",
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shopify Disabled State
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                state:
+
+                    "disabled",
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shopify Invited State
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                state:
+
+                    "invited",
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Shopify Declined State
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                state:
+
+                    "declined",
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Marketing Opt In
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                acceptsMarketing: true,
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Marketing Opt Out
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                acceptsMarketing: false,
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | Deleted Customers
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                deleted: true
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | AI Opt In
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                aiOptIn: true,
+
+                deleted: false
+
+            }),
+
+
+            /*
+            |--------------------------------------------------------------------------
+            | GDPR Consent
+            |--------------------------------------------------------------------------
+            */
+
+            Customer.countDocuments({
+
+                gdprConsent: true,
+
+                deleted: false
 
             })
 
@@ -1043,9 +2255,47 @@ export const getCustomerStatistics = async () => {
 
             active,
 
-            subscribed,
+            inactive,
 
-            guests
+            state: {
+
+                enabled,
+
+                disabled,
+
+                invited,
+
+                declined
+
+            },
+
+            marketing: {
+
+                optIn:
+
+                    marketingOptIn,
+
+                optOut:
+
+                    marketingOptOut
+
+            },
+
+            privacy: {
+
+                deleted,
+
+                gdprConsent
+
+            },
+
+            ai: {
+
+                optIn:
+
+                    aiOptIn
+
+            }
 
         };
 
@@ -1061,7 +2311,11 @@ export const getCustomerStatistics = async () => {
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1072,41 +2326,65 @@ export const getCustomerStatistics = async () => {
     }
 
 };
+//Part 4
 /*
 |--------------------------------------------------------------------------
 | Get Merchants
 |--------------------------------------------------------------------------
+|
+| Returns a paginated list of merchant users.
+|
+| User model fields:
+|
+| - firstName
+| - lastName
+| - email
+| - role
+| - isEmailVerified
+| - isActive
+| - lastLoginAt
+| - loginCount
+| - createdAt
+|
+|--------------------------------------------------------------------------
 */
 
-export const getMerchants = async (
+export const getMerchants = async ({
 
-    options = {}
+    page = DEFAULT_PAGE,
 
-) => {
+    limit = DEFAULT_LIMIT,
+
+    search = "",
+
+    isActive,
+
+    isEmailVerified
+
+} = {}) => {
 
     try {
 
-        const page = Math.max(
+        /*
+        |--------------------------------------------------------------------------
+        | Normalize Pagination
+        |--------------------------------------------------------------------------
+        */
 
-            Number(
+        const currentPage = Math.max(
 
-                options.page
-
-            ) || DEFAULT_PAGE,
+            Number(page) || DEFAULT_PAGE,
 
             1
 
         );
 
-        const limit = Math.min(
+
+        const currentLimit = Math.min(
 
             Math.max(
 
-                Number(
-
-                    options.limit
-
-                ) || DEFAULT_LIMIT,
+                Number(limit) || DEFAULT_LIMIT,
 
                 1
 
@@ -1116,61 +2394,142 @@ export const getMerchants = async (
 
         );
 
+
         const skip =
 
-            (page - 1) *
+            (currentPage - 1) *
 
-            limit;
+            currentLimit;
 
-        const search =
 
-            options.search?.trim();
+        /*
+        |--------------------------------------------------------------------------
+        | Build Filter
+        |--------------------------------------------------------------------------
+        */
 
         const filter = {
 
-            role: "merchant"
+            role:
+
+                USER_ROLES.MERCHANT
 
         };
 
-        if (search) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            search &&
+
+            typeof search === "string"
+
+        ) {
+
+            const searchRegex = {
+
+                $regex:
+
+                    search.trim(),
+
+                $options:
+
+                    "i"
+
+            };
+
 
             filter.$or = [
 
                 {
 
-                    email: {
+                    firstName:
 
-                        $regex:
-
-                            search,
-
-                        $options:
-
-                            "i"
-
-                    }
+                        searchRegex
 
                 },
 
                 {
 
-                    name: {
+                    lastName:
 
-                        $regex:
+                        searchRegex
 
-                            search,
+                },
 
-                        $options:
+                {
 
-                            "i"
+                    email:
 
-                    }
+                        searchRegex
 
                 }
 
             ];
 
         }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Active Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            isActive !== undefined &&
+
+            isActive !== null &&
+
+            isActive !== ""
+
+        ) {
+
+            filter.isActive =
+
+                isActive === true ||
+
+                isActive === "true";
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Email Verification Filter
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            isEmailVerified !== undefined &&
+
+            isEmailVerified !== null &&
+
+            isEmailVerified !== ""
+
+        ) {
+
+            filter.isEmailVerified =
+
+                isEmailVerified === true ||
+
+                isEmailVerified === "true";
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Query Merchants
+        |--------------------------------------------------------------------------
+        */
 
         const [
 
@@ -1180,15 +2539,29 @@ export const getMerchants = async (
 
         ] = await Promise.all([
 
-            User.find(
-
-                filter
-
-            )
+            User.find(filter)
 
                 .select(
 
-                    "-password -refreshToken"
+                    "firstName " +
+
+                    "lastName " +
+
+                    "email " +
+
+                    "role " +
+
+                    "isEmailVerified " +
+
+                    "isActive " +
+
+                    "lastLoginAt " +
+
+                    "loginCount " +
+
+                    "createdAt " +
+
+                    "updatedAt"
 
                 )
 
@@ -1198,27 +2571,17 @@ export const getMerchants = async (
 
                 })
 
-                .skip(
+                .skip(skip)
 
-                    skip
-
-                )
-
-                .limit(
-
-                    limit
-
-                )
+                .limit(currentLimit)
 
                 .lean(),
 
-            User.countDocuments(
 
-                filter
-
-            )
+            User.countDocuments(filter)
 
         ]);
+
 
         return {
 
@@ -1226,9 +2589,13 @@ export const getMerchants = async (
 
             pagination: {
 
-                page,
+                page:
 
-                limit,
+                    currentPage,
+
+                limit:
+
+                    currentLimit,
 
                 total,
 
@@ -1238,7 +2605,7 @@ export const getMerchants = async (
 
                         total /
 
-                        limit
+                        currentLimit
 
                     )
 
@@ -1258,7 +2625,11 @@ export const getMerchants = async (
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1275,6 +2646,10 @@ export const getMerchants = async (
 |--------------------------------------------------------------------------
 | Get Merchant By ID
 |--------------------------------------------------------------------------
+|
+| Returns a merchant together with their shops and subscriptions.
+|
+|--------------------------------------------------------------------------
 */
 
 export const getMerchantById = async (
@@ -1284,6 +2659,23 @@ export const getMerchantById = async (
 ) => {
 
     try {
+
+        if (!merchantId) {
+
+            throw new Error(
+
+                "Merchant ID is required."
+
+            );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Find Merchant
+        |--------------------------------------------------------------------------
+        */
 
         const merchant =
 
@@ -1295,17 +2687,48 @@ export const getMerchantById = async (
 
                 role:
 
-                    "merchant"
+                    USER_ROLES.MERCHANT
 
             })
 
                 .select(
 
-                    "-password -refreshToken"
+                    "firstName " +
+
+                    "lastName " +
+
+                    "email " +
+
+                    "role " +
+
+                    "isEmailVerified " +
+
+                    "isActive " +
+
+                    "avatar " +
+
+                    "phone " +
+
+                    "timezone " +
+
+                    "lastLoginAt " +
+
+                    "lastLoginIp " +
+
+                    "loginCount " +
+
+                    "failedLoginAttempts " +
+
+                    "passwordChangedAt " +
+
+                    "createdAt " +
+
+                    "updatedAt"
 
                 )
 
                 .lean();
+
 
         if (!merchant) {
 
@@ -1317,58 +2740,58 @@ export const getMerchantById = async (
 
         }
 
-        return merchant;
 
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to retrieve merchant.",
-
-            {
-
-                merchantId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Merchant Shops
-|--------------------------------------------------------------------------
-*/
-
-export const getMerchantShops = async (
-
-    merchantId
-
-) => {
-
-    try {
+        /*
+        |--------------------------------------------------------------------------
+        | Find Merchant Shops
+        |--------------------------------------------------------------------------
+        |
+        | Shop.owner → User
+        |
+        |--------------------------------------------------------------------------
+        */
 
         const shops =
 
             await Shop.find({
 
-                user:
+                owner:
 
                     merchantId
 
             })
+
+                .select(
+
+                    "shop " +
+
+                    "shopName " +
+
+                    "owner " +
+
+                    "isInstalled " +
+
+                    "status " +
+
+                    "planName " +
+
+                    "subscriptionStatus " +
+
+                    "trialStart " +
+
+                    "trialEnd " +
+
+                    "premiumLocked " +
+
+                    "stripeCustomerId " +
+
+                    "stripeSubscriptionId " +
+
+                    "createdAt " +
+
+                    "updatedAt"
+
+                )
 
                 .sort({
 
@@ -1378,7 +2801,91 @@ export const getMerchantShops = async (
 
                 .lean();
 
-        return shops;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Find Merchant Subscriptions
+        |--------------------------------------------------------------------------
+        |
+        | Subscription.user → User
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        const subscriptions =
+
+            await Subscription.find({
+
+                user:
+
+                    merchantId
+
+            })
+
+                .select(
+
+                    "shop " +
+
+                    "plan " +
+
+                    "amount " +
+
+                    "currency " +
+
+                    "status " +
+
+                    "trialStart " +
+
+                    "trialEnd " +
+
+                    "trialUsed " +
+
+                    "billingCycle " +
+
+                    "currentPeriodStart " +
+
+                    "currentPeriodEnd " +
+
+                    "nextBillingDate " +
+
+                    "cancelledAt " +
+
+                    "expiresAt " +
+
+                    "aiModel " +
+
+                    "premiumFeaturesEnabled " +
+
+                    "stripeCustomerId " +
+
+                    "stripeSubscriptionId " +
+
+                    "stripePriceId " +
+
+                    "createdAt " +
+
+                    "updatedAt"
+
+                )
+
+                .sort({
+
+                    createdAt: -1
+
+                })
+
+                .lean();
+
+
+        return {
+
+            merchant,
+
+            shops,
+
+            subscriptions
+
+        };
 
     }
 
@@ -1386,7 +2893,7 @@ export const getMerchantShops = async (
 
         logger.error(
 
-            "Failed to retrieve merchant shops.",
+            "Failed to retrieve merchant details.",
 
             {
 
@@ -1394,7 +2901,11 @@ export const getMerchantShops = async (
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1411,6 +2922,14 @@ export const getMerchantShops = async (
 |--------------------------------------------------------------------------
 | Update Merchant Status
 |--------------------------------------------------------------------------
+|
+| Activates or deactivates a merchant account.
+|
+| This only changes User.isActive.
+|
+| It does not automatically cancel Shopify or Stripe subscriptions.
+|
+|--------------------------------------------------------------------------
 */
 
 export const updateMerchantStatus = async (
@@ -1422,6 +2941,34 @@ export const updateMerchantStatus = async (
 ) => {
 
     try {
+
+        if (!merchantId) {
+
+            throw new Error(
+
+                "Merchant ID is required."
+
+            );
+
+        }
+
+
+        if (
+
+            typeof isActive !==
+
+            "boolean"
+
+        ) {
+
+            throw new Error(
+
+                "isActive must be a boolean."
+
+            );
+
+        }
+
 
         const merchant =
 
@@ -1435,7 +2982,7 @@ export const updateMerchantStatus = async (
 
                     role:
 
-                        "merchant"
+                        USER_ROLES.MERCHANT
 
                 },
 
@@ -1443,17 +2990,7 @@ export const updateMerchantStatus = async (
 
                     $set: {
 
-                        isActive:
-
-                            Boolean(
-
-                                isActive
-
-                            ),
-
-                        updatedAt:
-
-                            new Date()
+                        isActive
 
                     }
 
@@ -1461,7 +2998,9 @@ export const updateMerchantStatus = async (
 
                 {
 
-                    new: true
+                    new: true,
+
+                    runValidators: true
 
                 }
 
@@ -1469,11 +3008,22 @@ export const updateMerchantStatus = async (
 
                 .select(
 
-                    "-password -refreshToken"
+                    "firstName " +
+
+                    "lastName " +
+
+                    "email " +
+
+                    "role " +
+
+                    "isActive " +
+
+                    "updatedAt"
 
                 )
 
                 .lean();
+
 
         if (!merchant) {
 
@@ -1485,6 +3035,7 @@ export const updateMerchantStatus = async (
 
         }
 
+
         logger.info(
 
             "Merchant status updated.",
@@ -1493,17 +3044,12 @@ export const updateMerchantStatus = async (
 
                 merchantId,
 
-                isActive:
-
-                    Boolean(
-
-                        isActive
-
-                    )
+                isActive
 
             }
 
         );
+
 
         return merchant;
 
@@ -1521,7 +3067,359 @@ export const updateMerchantStatus = async (
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
+
+            }
+
+        );
+
+        throw error;
+
+    }
+
+};
+
+
+/*
+|--------------------------------------------------------------------------
+| Get Shops
+|--------------------------------------------------------------------------
+|
+| Returns a paginated list of Shopify stores.
+|
+| Shop model fields used:
+|
+| - owner
+| - shop
+| - isInstalled
+| - status
+| - planName
+| - subscriptionStatus
+| - trialStart
+| - trialEnd
+| - premiumLocked
+|
+|--------------------------------------------------------------------------
+*/
+
+export const getShops = async ({
+
+    page = DEFAULT_PAGE,
+
+    limit = DEFAULT_LIMIT,
+
+    search = "",
+
+    status,
+
+    isInstalled,
+
+    subscriptionStatus,
+
+    planName
+
+} = {}) => {
+
+    try {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Normalize Pagination
+        |--------------------------------------------------------------------------
+        */
+
+        const currentPage = Math.max(
+
+            Number(page) || DEFAULT_PAGE,
+
+            1
+
+        );
+
+
+        const currentLimit = Math.min(
+
+            Math.max(
+
+                Number(limit) || DEFAULT_LIMIT,
+
+                1
+
+            ),
+
+            MAX_LIMIT
+
+        );
+
+
+        const skip =
+
+            (currentPage - 1) *
+
+            currentLimit;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Build Filter
+        |--------------------------------------------------------------------------
+        */
+
+        const filter = {};
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Shop Search
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            search &&
+
+            typeof search === "string"
+
+        ) {
+
+            filter.shop = {
+
+                $regex:
+
+                    search.trim(),
+
+                $options:
+
+                    "i"
+
+            };
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Status
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            status &&
+
+            typeof status === "string"
+
+        ) {
+
+            filter.status =
+
+                status;
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Installation Status
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            isInstalled !== undefined &&
+
+            isInstalled !== null &&
+
+            isInstalled !== ""
+
+        ) {
+
+            filter.isInstalled =
+
+                isInstalled === true ||
+
+                isInstalled === "true";
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Subscription Status
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            subscriptionStatus &&
+
+            typeof subscriptionStatus === "string"
+
+        ) {
+
+            filter.subscriptionStatus =
+
+                subscriptionStatus;
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Plan
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+
+            planName &&
+
+            typeof planName === "string"
+
+        ) {
+
+            filter.planName =
+
+                planName;
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Query Shops
+        |--------------------------------------------------------------------------
+        */
+
+        const [
+
+            shops,
+
+            total
+
+        ] = await Promise.all([
+
+            Shop.find(filter)
+
+                .select(
+
+                    "shop " +
+
+                    "shopName " +
+
+                    "owner " +
+
+                    "isInstalled " +
+
+                    "status " +
+
+                    "planName " +
+
+                    "subscriptionStatus " +
+
+                    "trialStart " +
+
+                    "trialEnd " +
+
+                    "premiumLocked " +
+
+                    "stripeCustomerId " +
+
+                    "stripeSubscriptionId " +
+
+                    "createdAt " +
+
+                    "updatedAt"
+
+                )
+
+                .populate({
+
+                    path:
+
+                        "owner",
+
+                    select:
+
+                        "firstName " +
+
+                        "lastName " +
+
+                        "email " +
+
+                        "isActive"
+
+                })
+
+                .sort({
+
+                    createdAt: -1
+
+                })
+
+                .skip(skip)
+
+                .limit(currentLimit)
+
+                .lean(),
+
+
+            Shop.countDocuments(filter)
+
+        ]);
+
+
+        return {
+
+            shops,
+
+            pagination: {
+
+                page:
+
+                    currentPage,
+
+                limit:
+
+                    currentLimit,
+
+                total,
+
+                totalPages:
+
+                    Math.ceil(
+
+                        total /
+
+                        currentLimit
+
+                    )
+
+            }
+
+        };
+
+    }
+
+    catch (error) {
+
+        logger.error(
+
+            "Failed to retrieve shops.",
+
+            {
+
+                error:
+
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1538,6 +3436,10 @@ export const updateMerchantStatus = async (
 |--------------------------------------------------------------------------
 | Get Shop By ID
 |--------------------------------------------------------------------------
+|
+| Returns complete administrative information for one shop.
+|
+|--------------------------------------------------------------------------
 */
 
 export const getShopById = async (
@@ -1548,6 +3450,23 @@ export const getShopById = async (
 
     try {
 
+        if (!shopId) {
+
+            throw new Error(
+
+                "Shop ID is required."
+
+            );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Find Shop
+        |--------------------------------------------------------------------------
+        */
+
         const shop =
 
             await Shop.findById(
@@ -1556,7 +3475,62 @@ export const getShopById = async (
 
             )
 
+                .select(
+
+                    "shop " +
+
+                    "shopName " +
+
+                    "owner " +
+
+                    "isInstalled " +
+
+                    "status " +
+
+                    "planName " +
+
+                    "subscriptionStatus " +
+
+                    "trialStart " +
+
+                    "trialEnd " +
+
+                    "premiumLocked " +
+
+                    "stripeCustomerId " +
+
+                    "stripeSubscriptionId " +
+
+                    "createdAt " +
+
+                    "updatedAt"
+
+                )
+
+                .populate({
+
+                    path:
+
+                        "owner",
+
+                    select:
+
+                        "firstName " +
+
+                        "lastName " +
+
+                        "email " +
+
+                        "role " +
+
+                        "isActive " +
+
+                        "isEmailVerified"
+
+                })
+
                 .lean();
+
 
         if (!shop) {
 
@@ -1568,7 +3542,150 @@ export const getShopById = async (
 
         }
 
-        return shop;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Shop Subscription
+        |--------------------------------------------------------------------------
+        */
+
+        const subscription =
+
+            await Subscription.findOne({
+
+                shop:
+
+                    shopId
+
+            })
+
+                .sort({
+
+                    createdAt: -1
+
+                })
+
+                .select(
+
+                    "user " +
+
+                    "shop " +
+
+                    "plan " +
+
+                    "amount " +
+
+                    "currency " +
+
+                    "status " +
+
+                    "trialStart " +
+
+                    "trialEnd " +
+
+                    "trialUsed " +
+
+                    "billingCycle " +
+
+                    "currentPeriodStart " +
+
+                    "currentPeriodEnd " +
+
+                    "nextBillingDate " +
+
+                    "cancelledAt " +
+
+                    "expiresAt " +
+
+                    "aiModel " +
+
+                    "premiumFeaturesEnabled " +
+
+                    "stripeCustomerId " +
+
+                    "stripeSubscriptionId " +
+
+                    "stripePriceId " +
+
+                    "stripeInvoiceId " +
+
+                    "createdAt " +
+
+                    "updatedAt"
+
+                )
+
+                .lean();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Shop Statistics
+        |--------------------------------------------------------------------------
+        */
+
+        const [
+
+            orderCount,
+
+            productCount,
+
+            customerCount
+
+        ] = await Promise.all([
+
+            Order.countDocuments({
+
+                shop:
+
+                    shopId
+
+            }),
+
+            Product.countDocuments({
+
+                shop:
+
+                    shopId
+
+            }),
+
+            Customer.countDocuments({
+
+                shop:
+
+                    shopId,
+
+                deleted: false
+
+            })
+
+        ]);
+
+
+        return {
+
+            shop,
+
+            subscription,
+
+            statistics: {
+
+                orders:
+
+                    orderCount,
+
+                products:
+
+                    productCount,
+
+                customers:
+
+                    customerCount
+
+            }
+
+        };
 
     }
 
@@ -1576,7 +3693,7 @@ export const getShopById = async (
 
         logger.error(
 
-            "Failed to retrieve shop.",
+            "Failed to retrieve shop details.",
 
             {
 
@@ -1584,7 +3701,11 @@ export const getShopById = async (
 
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1601,17 +3722,68 @@ export const getShopById = async (
 |--------------------------------------------------------------------------
 | Update Shop Status
 |--------------------------------------------------------------------------
+|
+| Updates the operational status of a Shopify store.
+|
+| Valid values from Shop model:
+|
+| - active
+| - inactive
+| - suspended
+|
+|--------------------------------------------------------------------------
 */
 
 export const updateShopStatus = async (
 
     shopId,
 
-    installed
+    status
 
 ) => {
 
     try {
+
+        if (!shopId) {
+
+            throw new Error(
+
+                "Shop ID is required."
+
+            );
+
+        }
+
+
+        const allowedStatuses = [
+
+            "active",
+
+            "inactive",
+
+            "suspended"
+
+        ];
+
+
+        if (
+
+            !allowedStatuses.includes(
+
+                status
+
+            )
+
+        ) {
+
+            throw new Error(
+
+                "Invalid shop status."
+
+            );
+
+        }
+
 
         const shop =
 
@@ -1623,17 +3795,7 @@ export const updateShopStatus = async (
 
                     $set: {
 
-                        installed:
-
-                            Boolean(
-
-                                installed
-
-                            ),
-
-                        updatedAt:
-
-                            new Date()
+                        status
 
                     }
 
@@ -1641,13 +3803,38 @@ export const updateShopStatus = async (
 
                 {
 
-                    new: true
+                    new: true,
+
+                    runValidators: true
 
                 }
 
             )
 
+                .select(
+
+                    "shop " +
+
+                    "shopName " +
+
+                    "owner " +
+
+                    "isInstalled " +
+
+                    "status " +
+
+                    "planName " +
+
+                    "subscriptionStatus " +
+
+                    "premiumLocked " +
+
+                    "updatedAt"
+
+                )
+
                 .lean();
+
 
         if (!shop) {
 
@@ -1659,6 +3846,7 @@ export const updateShopStatus = async (
 
         }
 
+
         logger.info(
 
             "Shop status updated.",
@@ -1667,17 +3855,12 @@ export const updateShopStatus = async (
 
                 shopId,
 
-                installed:
-
-                    Boolean(
-
-                        installed
-
-                    )
+                status
 
             }
 
         );
+
 
         return shop;
 
@@ -1693,9 +3876,15 @@ export const updateShopStatus = async (
 
                 shopId,
 
+                status,
+
                 error:
 
-                    error.message
+                    error.message,
+
+                stack:
+
+                    error.stack
 
             }
 
@@ -1704,1256 +3893,5 @@ export const updateShopStatus = async (
         throw error;
 
     }
-
-};
-/*
-|--------------------------------------------------------------------------
-| Get All Admin Users
-|--------------------------------------------------------------------------
-*/
-
-export const getAdminUsers = async (
-
-    options = {}
-
-) => {
-
-    try {
-
-        const page = Math.max(
-
-            Number(
-
-                options.page
-
-            ) || DEFAULT_PAGE,
-
-            1
-
-        );
-
-        const limit = Math.min(
-
-            Math.max(
-
-                Number(
-
-                    options.limit
-
-                ) || DEFAULT_LIMIT,
-
-                1
-
-            ),
-
-            MAX_LIMIT
-
-        );
-
-        const skip =
-
-            (page - 1) *
-
-            limit;
-
-        const filter = {
-
-            role: {
-
-                $in: [
-
-                    ADMIN_ROLES.ADMIN,
-
-                    ADMIN_ROLES.SUPER_ADMIN
-
-                ]
-
-            }
-
-        };
-
-        const [
-
-            admins,
-
-            total
-
-        ] = await Promise.all([
-
-            User.find(
-
-                filter
-
-            )
-
-                .select(
-
-                    "-password -refreshToken"
-
-                )
-
-                .sort({
-
-                    createdAt: -1
-
-                })
-
-                .skip(
-
-                    skip
-
-                )
-
-                .limit(
-
-                    limit
-
-                )
-
-                .lean(),
-
-            User.countDocuments(
-
-                filter
-
-            )
-
-        ]);
-
-        return {
-
-            admins,
-
-            pagination: {
-
-                page,
-
-                limit,
-
-                total,
-
-                totalPages:
-
-                    Math.ceil(
-
-                        total /
-
-                        limit
-
-                    )
-
-            }
-
-        };
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to retrieve admin users.",
-
-            {
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Update User Role
-|--------------------------------------------------------------------------
-*/
-
-export const updateUserRole = async (
-
-    userId,
-
-    role
-
-) => {
-
-    try {
-
-        if (
-
-            !Object.values(
-
-                ADMIN_ROLES
-
-            ).includes(
-
-                role
-
-            ) &&
-
-            role !== "merchant"
-
-        ) {
-
-            throw new Error(
-
-                "Invalid user role."
-
-            );
-
-        }
-
-        const user =
-
-            await User.findByIdAndUpdate(
-
-                userId,
-
-                {
-
-                    $set: {
-
-                        role,
-
-                        updatedAt:
-
-                            new Date()
-
-                    }
-
-                },
-
-                {
-
-                    new: true
-
-                }
-
-            )
-
-                .select(
-
-                    "-password -refreshToken"
-
-                )
-
-                .lean();
-
-        if (!user) {
-
-            throw new Error(
-
-                "User not found."
-
-            );
-
-        }
-
-        logger.info(
-
-            "User role updated.",
-
-            {
-
-                userId,
-
-                role
-
-            }
-
-        );
-
-        return user;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to update user role.",
-
-            {
-
-                userId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Subscription By Shop
-|--------------------------------------------------------------------------
-*/
-
-export const getShopSubscription = async (
-
-    shop
-
-) => {
-
-    try {
-
-        const subscription =
-
-            await Subscription.findOne({
-
-                shop
-
-            })
-
-                .lean();
-
-        if (!subscription) {
-
-            throw new Error(
-
-                "Subscription not found."
-
-            );
-
-        }
-
-        return subscription;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to retrieve shop subscription.",
-
-            {
-
-                shop,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Update Subscription Status
-|--------------------------------------------------------------------------
-*/
-
-export const updateSubscriptionStatus = async (
-
-    subscriptionId,
-
-    status
-
-) => {
-
-    try {
-
-        const allowedStatuses = [
-
-            "trial",
-
-            "active",
-
-            "past_due",
-
-            "cancelled",
-
-            "expired"
-
-        ];
-
-        if (
-
-            !allowedStatuses.includes(
-
-                status
-
-            )
-
-        ) {
-
-            throw new Error(
-
-                "Invalid subscription status."
-
-            );
-
-        }
-
-        const subscription =
-
-            await Subscription.findByIdAndUpdate(
-
-                subscriptionId,
-
-                {
-
-                    $set: {
-
-                        status,
-
-                        updatedAt:
-
-                            new Date()
-
-                    }
-
-                },
-
-                {
-
-                    new: true
-
-                }
-
-            )
-
-                .lean();
-
-        if (!subscription) {
-
-            throw new Error(
-
-                "Subscription not found."
-
-            );
-
-        }
-
-        logger.info(
-
-            "Subscription status updated by admin.",
-
-            {
-
-                subscriptionId,
-
-                status
-
-            }
-
-        );
-
-        return subscription;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to update subscription status.",
-
-            {
-
-                subscriptionId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Change Subscription Plan
-|--------------------------------------------------------------------------
-*/
-
-export const updateSubscriptionPlan = async (
-
-    subscriptionId,
-
-    plan
-
-) => {
-
-    try {
-
-        const allowedPlans = [
-
-            "starter",
-
-            "growth",
-
-            "premium",
-
-            "enterprise"
-
-        ];
-
-        if (
-
-            !allowedPlans.includes(
-
-                plan
-
-            )
-
-        ) {
-
-            throw new Error(
-
-                "Invalid subscription plan."
-
-            );
-
-        }
-
-        const subscription =
-
-            await Subscription.findByIdAndUpdate(
-
-                subscriptionId,
-
-                {
-
-                    $set: {
-
-                        plan,
-
-                        updatedAt:
-
-                            new Date()
-
-                    }
-
-                },
-
-                {
-
-                    new: true
-
-                }
-
-            )
-
-                .lean();
-
-        if (!subscription) {
-
-            throw new Error(
-
-                "Subscription not found."
-
-            );
-
-        }
-
-        logger.info(
-
-            "Subscription plan updated by admin.",
-
-            {
-
-                subscriptionId,
-
-                plan
-
-            }
-
-        );
-
-        return subscription;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to update subscription plan.",
-
-            {
-
-                subscriptionId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Cancel Subscription
-|--------------------------------------------------------------------------
-*/
-
-export const cancelShopSubscription = async (
-
-    subscriptionId
-
-) => {
-
-    try {
-
-        const subscription =
-
-            await Subscription.findByIdAndUpdate(
-
-                subscriptionId,
-
-                {
-
-                    $set: {
-
-                        status:
-
-                            "cancelled",
-
-                        cancelledAt:
-
-                            new Date(),
-
-                        updatedAt:
-
-                            new Date()
-
-                    }
-
-                },
-
-                {
-
-                    new: true
-
-                }
-
-            )
-
-                .lean();
-
-        if (!subscription) {
-
-            throw new Error(
-
-                "Subscription not found."
-
-            );
-
-        }
-
-        logger.info(
-
-            "Subscription cancelled by admin.",
-
-            {
-
-                subscriptionId
-
-            }
-
-        );
-
-        return subscription;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to cancel subscription.",
-
-            {
-
-                subscriptionId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Activate Subscription
-|--------------------------------------------------------------------------
-*/
-
-export const activateShopSubscription = async (
-
-    subscriptionId
-
-) => {
-
-    try {
-
-        const subscription =
-
-            await Subscription.findByIdAndUpdate(
-
-                subscriptionId,
-
-                {
-
-                    $set: {
-
-                        status:
-
-                            "active",
-
-                        activatedAt:
-
-                            new Date(),
-
-                        updatedAt:
-
-                            new Date()
-
-                    },
-
-                    $unset: {
-
-                        cancelledAt: 1
-
-                    }
-
-                },
-
-                {
-
-                    new: true
-
-                }
-
-            )
-
-                .lean();
-
-        if (!subscription) {
-
-            throw new Error(
-
-                "Subscription not found."
-
-            );
-
-        }
-
-        logger.info(
-
-            "Subscription activated by admin.",
-
-            {
-
-                subscriptionId
-
-            }
-
-        );
-
-        return subscription;
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to activate subscription.",
-
-            {
-
-                subscriptionId,
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-/*
-|--------------------------------------------------------------------------
-| Get Recent Platform Activity
-|--------------------------------------------------------------------------
-*/
-
-export const getRecentPlatformActivity = async (
-
-    options = {}
-
-) => {
-
-    try {
-
-        const limit = Math.min(
-
-            Math.max(
-
-                Number(
-
-                    options.limit
-
-                ) || 10,
-
-                1
-
-            ),
-
-            50
-
-        );
-
-        const [
-
-            recentUsers,
-
-            recentShops,
-
-            recentSubscriptions,
-
-            recentOrders
-
-        ] = await Promise.all([
-
-            User.find()
-
-                .select(
-
-                    "name email role createdAt"
-
-                )
-
-                .sort({
-
-                    createdAt: -1
-
-                })
-
-                .limit(
-
-                    limit
-
-                )
-
-                .lean(),
-
-            Shop.find()
-
-                .select(
-
-                    "shopifyDomain installed createdAt"
-
-                )
-
-                .sort({
-
-                    createdAt: -1
-
-                })
-
-                .limit(
-
-                    limit
-
-                )
-
-                .lean(),
-
-            Subscription.find()
-
-                .select(
-
-                    "shop plan status createdAt updatedAt"
-
-                )
-
-                .sort({
-
-                    updatedAt: -1
-
-                })
-
-                .limit(
-
-                    limit
-
-                )
-
-                .lean(),
-
-            Order.find()
-
-                .select(
-
-                    "shopifyOrderId shop totalPrice financialStatus createdAt"
-
-                )
-
-                .sort({
-
-                    createdAt: -1
-
-                })
-
-                .limit(
-
-                    limit
-
-                )
-
-                .lean()
-
-        ]);
-
-        return {
-
-            users:
-
-                recentUsers,
-
-            shops:
-
-                recentShops,
-
-            subscriptions:
-
-                recentSubscriptions,
-
-            orders:
-
-                recentOrders,
-
-            generatedAt:
-
-                new Date()
-
-        };
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Failed to retrieve recent platform activity.",
-
-            {
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Admin Service Health
-|--------------------------------------------------------------------------
-*/
-
-export const getAdminServiceHealth = async () => {
-
-    try {
-
-        const [
-
-            users,
-
-            shops,
-
-            subscriptions
-
-        ] = await Promise.all([
-
-            User.estimatedDocumentCount(),
-
-            Shop.estimatedDocumentCount(),
-
-            Subscription.estimatedDocumentCount()
-
-        ]);
-
-        return {
-
-            service:
-
-                ADMIN_SERVICE_NAME,
-
-            version:
-
-                ADMIN_SERVICE_VERSION,
-
-            status:
-
-                "healthy",
-
-            database: {
-
-                users,
-
-                shops,
-
-                subscriptions
-
-            },
-
-            timestamp:
-
-                new Date()
-
-        };
-
-    }
-
-    catch (error) {
-
-        logger.error(
-
-            "Admin service health check failed.",
-
-            {
-
-                error:
-
-                    error.message
-
-            }
-
-        );
-
-        throw error;
-
-    }
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Get Admin Service Information
-|--------------------------------------------------------------------------
-*/
-
-export const getAdminServiceInfo = () => {
-
-    return {
-
-        service:
-
-            ADMIN_SERVICE_NAME,
-
-        version:
-
-            ADMIN_SERVICE_VERSION,
-
-        roles:
-
-            Object.values(
-
-                ADMIN_ROLES
-
-            ),
-
-        pagination: {
-
-            defaultPage:
-
-                DEFAULT_PAGE,
-
-            defaultLimit:
-
-                DEFAULT_LIMIT,
-
-            maxLimit:
-
-                MAX_LIMIT
-
-        }
-
-    };
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Service Startup Validation
-|--------------------------------------------------------------------------
-*/
-
-logger.info(
-
-    "========================================"
-
-);
-
-logger.info(
-
-    "Layboka Admin Service Ready"
-
-);
-
-logger.info(
-
-    `Version : ${ADMIN_SERVICE_VERSION}`
-
-);
-
-logger.info(
-
-    "Status  : Initialized"
-
-);
-
-logger.info(
-
-    "========================================"
-
-);
-
-
-/*
-|--------------------------------------------------------------------------
-| Named Exports
-|--------------------------------------------------------------------------
-*/
-
-export {
-
-    ADMIN_SERVICE_NAME,
-
-    ADMIN_SERVICE_VERSION,
-
-    DEFAULT_PAGE,
-
-    DEFAULT_LIMIT,
-
-    MAX_LIMIT
-
-};
-
-
-/*
-|--------------------------------------------------------------------------
-| Default Export
-|--------------------------------------------------------------------------
-*/
-
-export default {
-
-    getPlatformOverview,
-
-    getDashboardStatistics,
-
-    getMerchantStatistics,
-
-    getSubscriptionStatistics,
-
-    getRevenueStatistics,
-
-    getOrderStatistics,
-
-    getProductStatistics,
-
-    getCustomerStatistics,
-
-    getMerchants,
-
-    getMerchantById,
-
-    getMerchantShops,
-
-    updateMerchantStatus,
-
-    getShopById,
-
-    updateShopStatus,
-
-    getAdminUsers,
-
-    updateUserRole,
-
-    getShopSubscription,
-
-    updateSubscriptionStatus,
-
-    updateSubscriptionPlan,
-
-    cancelShopSubscription,
-
-    activateShopSubscription,
-
-    getRecentPlatformActivity,
-
-    getAdminServiceHealth,
-
-    getAdminServiceInfo
 
 };
