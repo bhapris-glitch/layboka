@@ -107,7 +107,7 @@ const shopSchema = new mongoose.Schema(
       type: Date,
       default: () => {
         const trial = new Date();
-        trial.setDate(trial.getDate() + 7);
+        trial.setDate(trial.getDate() + 5);
         return trial;
       }
     },
@@ -129,7 +129,7 @@ const shopSchema = new mongoose.Schema(
         "gpt-4o-mini",
         "gpt-5"
       ],
-      default: "gpt-5"
+      default: "gpt-4o-mini"
     },
 
     chatbotInstalled: {
