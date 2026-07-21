@@ -364,51 +364,90 @@ cancelledAt: {
 monthlyMessageLimit: {
 
     type:
-
         Number,
 
     default:
-
         500
 
 },
 
-
 monthlyMessageUsed: {
 
     type:
-
         Number,
 
     default:
-
         0
 
 },
-
 
 monthlyTokenLimit: {
 
     type:
-
         Number,
 
     default:
-
         10000
 
 },
 
-
 monthlyTokenUsed: {
 
     type:
-
         Number,
 
     default:
-
         0
+
+},
+
+/*
+|--------------------------------------------------------------------------
+| AI Model
+|--------------------------------------------------------------------------
+*/
+
+aiModel: {
+
+    type:
+        String,
+
+    enum: [
+
+        "gpt-4o-mini",
+
+        "gpt-5"
+
+    ],
+
+    default:
+        "gpt-4o-mini"
+
+},
+
+/*
+|--------------------------------------------------------------------------
+| Usage Tracking Timestamps
+|--------------------------------------------------------------------------
+*/
+
+usageResetAt: {
+
+    type:
+        Date,
+
+    default:
+        null
+
+},
+
+lastUsageAt: {
+
+    type:
+        Date,
+
+    default:
+        null
 
 }
 },
