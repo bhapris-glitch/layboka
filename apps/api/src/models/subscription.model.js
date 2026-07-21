@@ -251,55 +251,60 @@ currency: {
 */
 
 trialStart: {
-
-    type:
-
-        Date,
-
-    default:
-
-        Date.now
-
+    type: Date,
+    default: Date.now
 },
-
 
 trialEnd: {
+    type: Date,
+    default: function() {
+        const date = new Date();
 
-    type:
+        date.setDate(
+            date.getDate() + 5
+        );
 
-        Date,
-
-    default:
-
-        function() {
-
-            const date = new Date();
-
-            date.setDate(
-
-                date.getDate() + 5
-
-            );
-
-            return date;
-
-        }
-
+        return date;
+    }
 },
-
 
 trialDays: {
-
-    type:
-
-        Number,
-
-    default:
-
-        5
-
+    type: Number,
+    default: 5
 },
 
+/*
+|--------------------------------------------------------------------------
+| AI Model
+|--------------------------------------------------------------------------
+*/
+
+aiModel: {
+    type: String,
+
+    enum: [
+        "gpt-4o-mini",
+        "gpt-5"
+    ],
+
+    default: "gpt-4o-mini"
+},
+
+/*
+|--------------------------------------------------------------------------
+| Usage Tracking
+|--------------------------------------------------------------------------
+*/
+
+usageResetAt: {
+    type: Date,
+    default: null
+},
+
+lastUsageAt: {
+    type: Date,
+    default: null
+},
 
 /*
 |--------------------------------------------------------------------------
@@ -308,28 +313,13 @@ trialDays: {
 */
 
 currentPeriodStart: {
-
-    type:
-
-        Date,
-
-    default:
-
-        null
-
+    type: Date,
+    default: null
 },
 
-
 currentPeriodEnd: {
-
-    type:
-
-        Date,
-
-    default:
-
-        null
-
+    type: Date,
+    default: null
 },
 
 
