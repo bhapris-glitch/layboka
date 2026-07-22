@@ -3767,38 +3767,9 @@ async function deactivateShop(
         );
 
 
-    if (
+    shop.status =
 
-        Shop.schema.path(
-
-            "isActive"
-
-        )
-
-    ) {
-
-        shop.isActive =
-
-            false;
-
-    }
-
-
-    if (
-
-        Shop.schema.path(
-
-            "status"
-
-        )
-
-    ) {
-
-        shop.status =
-
-            "inactive";
-
-    }
+        "inactive";
 
 
     await shop.save();
@@ -3811,7 +3782,6 @@ async function deactivateShop(
     );
 
 }
-
 
 /*
 |--------------------------------------------------------------------------
