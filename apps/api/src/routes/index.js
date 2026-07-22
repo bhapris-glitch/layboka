@@ -27,7 +27,7 @@ import notificationRoutes from "./notification.routes.js";
 import paymentRoutes from "./payment.routes.js";
 import subscriptionRoutes from "./subscription.routes.js";
 import uploadRoutes from "./upload.routes.js";
-
+import adminRoutes from "./admin.routes.js";
 /*
 |--------------------------------------------------------------------------
 | Router
