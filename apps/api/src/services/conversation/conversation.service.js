@@ -3,7 +3,7 @@ import crypto from "crypto";
 import Conversation from "../../models/Conversation.js";
 import Message from "../../models/Message.js";
 import Visitor from "../../models/Visitor.js";
-import Shop from "../../models/Shop.js";
+import Shop from "../../models/shop.js";
 import Subscription from "../../models/Subscription.js";
 
 /*
