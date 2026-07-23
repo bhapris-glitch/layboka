@@ -8,7 +8,7 @@ import {
 
 import { RestClient } from "@shopify/shopify-api";
 
-import Shop from "../../models/Shop.js";
+import Shop from "../../models/shop.js";
 
 /*
 |--------------------------------------------------------------------------
