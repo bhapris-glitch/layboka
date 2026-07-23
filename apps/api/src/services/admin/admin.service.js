@@ -5980,11 +5980,11 @@ async function getStoreOverview(
 
             shopDomain:
 
-                shop.shopDomain || "",
+                shop.shop || "",
 
             myshopifyDomain:
 
-                shop.myshopifyDomain || "",
+                shop.shop || "",
 
             email:
 
@@ -6004,7 +6004,7 @@ async function getStoreOverview(
 
             isActive:
 
-                shop.isActive !== false
+                shop.status === "active"
 
         },
 
@@ -6682,11 +6682,11 @@ async function getStoreInformation(
 
         shopDomain:
 
-            shop.shopDomain || "",
+            shop.shop || "",
 
         myshopifyDomain:
 
-            shop.myshopifyDomain || "",
+            shop.shop || "",
 
         email:
 
@@ -6710,7 +6710,7 @@ async function getStoreInformation(
 
         isActive:
 
-            shop.isActive !== false,
+            shop.status === "active",
 
         installedAt:
 
@@ -6847,11 +6847,11 @@ async function updateStoreInformation(
 
         shopDomain:
 
-            shop.shopDomain || "",
+            shop.shop || "",
 
         myshopifyDomain:
 
-            shop.myshopifyDomain || "",
+            shop.shop || "",
 
         email:
 
@@ -6875,7 +6875,7 @@ async function updateStoreInformation(
 
         isActive:
 
-            shop.isActive !== false
+            shop.status === "active",
 
     };
 
