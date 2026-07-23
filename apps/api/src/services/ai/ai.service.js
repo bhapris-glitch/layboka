@@ -8,7 +8,7 @@ import ResponseService from "./response.service.js";
 import Conversation from "../../models/Conversation.js";
 import Message from "../../models/Message.js";
 import Product from "../../models/Product.js";
-import Shop from "../../models/Shop.js";
+import Shop from "../../models/shop.js";
 import Subscription from "../../models/Subscription.js";
 
 /*
