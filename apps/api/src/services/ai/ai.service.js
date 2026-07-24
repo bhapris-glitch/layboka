@@ -2,23 +2,28 @@
 |--------------------------------------------------------------------------
 | services/ai.service.js
 |--------------------------------------------------------------------------
-| Layboka AI - Main AI Business Logic Service
+| Layboka AI - Main AI Orchestration Service
 |--------------------------------------------------------------------------
 |
-| PART 1
+| Part 1
 |
 | Includes:
 |
-| 1. Imports
-| 2. AI Configuration
-| 3. Plan / Model Resolver
-| 4. Subscription Validation
-| 5. Context Loading
-| 6. Product Context
-| 7. Memory Context
-| 8. Intent Analysis
-| 9. Product Recommendations
-| 10. Prompt Generation
+| - Imports
+| - AI Configuration
+| - Plan / Model Resolver
+| - Token Limit Resolver
+| - Subscription Validation
+| - Conversation Loading
+| - Visitor Loading
+| - Shop Loading
+| - Product Loading
+| - Product Context
+| - Memory Context
+| - Complete AI Context
+| - Customer Intent Analysis
+| - Product Recommendations
+| - Prompt Generation
 |
 |--------------------------------------------------------------------------
 */
@@ -35,51 +40,35 @@ import ResponseService from "./response.service.js";
 import Conversation from "../../models/Conversation.js";
 import Message from "../../models/Message.js";
 import Product from "../../models/Product.js";
-import Visitor from "../../models/Visitor.js";
 import Shop from "../../models/shop.js";
 import Subscription from "../../models/Subscription.js";
+import Visitor from "../../models/Visitor.js";
 
 import logger from "../../config/logger.js";
+
 
 /*
 |--------------------------------------------------------------------------
 | AI Configuration
 |--------------------------------------------------------------------------
+|
+| IMPORTANT:
+|
+| maxTokens below means MAXIMUM OUTPUT TOKENS PER AI RESPONSE.
+|
+| It does NOT represent:
+|
+| - Monthly subscription quota
+| - Monthly API usage
+| - Monthly billing limit
+|
+| Monthly usage should be handled separately by the Subscription model
+| and billing / usage system.
+|
+|--------------------------------------------------------------------------
 */
 
 export const AI_CONFIG = Object.freeze({
-
-    /*
-    |--------------------------------------------------------------------------
-    | Supported Plans
-    |--------------------------------------------------------------------------
-    */
-
-    PLANS: Object.freeze({
-
-        STARTER: "Starter",
-
-        GROWTH: "Growth",
-
-        PREMIUM: "Premium",
-
-        ENTERPRISE: "Enterprise"
-
-    }),
-
-    /*
-    |--------------------------------------------------------------------------
-    | AI Models
-    |--------------------------------------------------------------------------
-    |
-    | Starter  -> GPT-4o-mini
-    | Growth   -> GPT-4o-mini
-    | Premium  -> GPT-5
-    | Enterprise -> GPT-5
-    |
-    | Actual model resolution is handled by OpenAIService.
-    |
-    */
 
     MODELS: Object.freeze({
 
@@ -93,20 +82,7 @@ export const AI_CONFIG = Object.freeze({
 
     }),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Maximum AI Output Tokens Per Response
-    |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    |
-    | These are NOT monthly usage limits.
-    |
-    | They control maximum response size for one AI request.
-    |
-    */
-
-    RESPONSE_TOKEN_LIMITS: Object.freeze({
+    MAX_OUTPUT_TOKENS: Object.freeze({
 
         STARTER: 300,
 
@@ -118,608 +94,328 @@ export const AI_CONFIG = Object.freeze({
 
     }),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Conversation Configuration
-    |--------------------------------------------------------------------------
-    */
-
     HISTORY_MESSAGES: 20,
 
     MAX_RECOMMENDATIONS: 6,
 
-    DEFAULT_TEMPERATURE: 0.7,
+    TEMPERATURE: 0.7,
 
-    MAX_RETRIES: 3,
-
-    RETRY_DELAY: 1000
+    MAX_RETRIES: 3
 
 });
 
+
 /*
 |--------------------------------------------------------------------------
-| AI Service
+| Plan Normalizer
 |--------------------------------------------------------------------------
 */
 
-class AIService {
+export function normalizePlan(plan = "Starter") {
 
-    constructor() {
+    const normalizedPlan = String(plan)
+        .trim()
+        .toLowerCase();
 
-        /*
-        |--------------------------------------------------------------------------
-        | External Services
-        |--------------------------------------------------------------------------
-        */
+    switch (normalizedPlan) {
 
-        this.openai = OpenAIService;
+        case "starter":
+            return "Starter";
 
-        this.prompt = PromptService;
+        case "growth":
+            return "Growth";
 
-        this.memory = MemoryService;
+        case "premium":
+            return "Premium";
 
-        this.recommendation =
-            RecommendationService;
+        case "enterprise":
+            return "Enterprise";
 
-        this.intent =
-            IntentService;
-
-        this.response =
-            ResponseService;
+        default:
+            return "Starter";
 
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Normalize Plan
-    |--------------------------------------------------------------------------
-    */
+}
 
-    normalizePlan(plan = "Starter") {
 
-        const normalized =
-            String(plan || "Starter")
-                .trim()
-                .toLowerCase();
+/*
+|--------------------------------------------------------------------------
+| Get Model For Plan
+|--------------------------------------------------------------------------
+|
+| The actual model definitions are maintained by OpenAIService.
+|
+| This function only provides a stable AIService-level resolver.
+|
+|--------------------------------------------------------------------------
+*/
 
-        switch (normalized) {
+export function getModelForPlan(plan = "Starter") {
 
-            case "starter":
+    const normalizedPlan =
+        normalizePlan(plan);
 
-                return "Starter";
+    const modelConfig =
+        OpenAIService.getModelByPlan(
+            normalizedPlan
+        );
 
-            case "growth":
+    return modelConfig.model;
 
-                return "Growth";
+}
 
-            case "premium":
 
-                return "Premium";
+/*
+|--------------------------------------------------------------------------
+| Get Maximum Output Tokens For Plan
+|--------------------------------------------------------------------------
+*/
 
-            case "enterprise":
+export function getMaxTokensForPlan(
+    plan = "Starter"
+) {
 
-                return "Enterprise";
+    const normalizedPlan =
+        normalizePlan(plan);
 
-            default:
+    const modelConfig =
+        OpenAIService.getModelByPlan(
+            normalizedPlan
+        );
 
-                return "Starter";
+    return modelConfig.maxTokens;
 
-        }
+}
 
-    }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Get Model For Plan
-    |--------------------------------------------------------------------------
-    */
+/*
+|--------------------------------------------------------------------------
+| Get AI Plan Configuration
+|--------------------------------------------------------------------------
+*/
 
-    getModel(plan = "Starter") {
+export function getPlanConfiguration(
+    plan = "Starter"
+) {
 
-        const normalizedPlan =
-            this.normalizePlan(plan);
+    const normalizedPlan =
+        normalizePlan(plan);
 
-        /*
-        |--------------------------------------------------------------------------
-        | Prefer OpenAIService Model Resolver
-        |--------------------------------------------------------------------------
-        */
+    const modelConfig =
+        OpenAIService.getModelByPlan(
+            normalizedPlan
+        );
 
-        if (
-            this.openai &&
-            typeof this.openai.getModelByPlan === "function"
-        ) {
+    return {
 
-            const config =
-                this.openai.getModelByPlan(
-                    normalizedPlan
-                );
+        plan: normalizedPlan,
 
-            if (config?.model) {
+        model:
+            modelConfig.model,
 
-                return config.model;
+        maxTokens:
+            modelConfig.maxTokens
 
-            }
+    };
 
-        }
+}
 
-        /*
-        |--------------------------------------------------------------------------
-        | Safe Fallback
-        |--------------------------------------------------------------------------
-        */
 
-        switch (normalizedPlan) {
+/*
+|--------------------------------------------------------------------------
+| Validate Subscription
+|--------------------------------------------------------------------------
+|
+| Validates whether the subscription is allowed to use AI.
+|
+| This function does not perform monthly token accounting.
+| Usage accounting is handled separately.
+|
+|--------------------------------------------------------------------------
+*/
 
-            case "Starter":
+export function validateSubscription(
+    subscription
+) {
 
-                return AI_CONFIG.MODELS.STARTER;
+    if (!subscription) {
 
-            case "Growth":
-
-                return AI_CONFIG.MODELS.GROWTH;
-
-            case "Premium":
-
-                return AI_CONFIG.MODELS.PREMIUM;
-
-            case "Enterprise":
-
-                return AI_CONFIG.MODELS.ENTERPRISE;
-
-            default:
-
-                return AI_CONFIG.MODELS.STARTER;
-
-        }
-
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get Response Token Limit
-    |--------------------------------------------------------------------------
-    */
-
-    getTokenLimit(plan = "Starter") {
-
-        const normalizedPlan =
-            this.normalizePlan(plan);
-
-        /*
-        |--------------------------------------------------------------------------
-        | Prefer OpenAIService Configuration
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            this.openai &&
-            typeof this.openai.getModelByPlan === "function"
-        ) {
-
-            const config =
-                this.openai.getModelByPlan(
-                    normalizedPlan
-                );
-
-            if (
-                Number.isFinite(
-                    Number(config?.maxTokens)
-                )
-            ) {
-
-                return Number(
-                    config.maxTokens
-                );
-
-            }
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Safe Fallback
-        |--------------------------------------------------------------------------
-        */
-
-        switch (normalizedPlan) {
-
-            case "Starter":
-
-                return AI_CONFIG
-                    .RESPONSE_TOKEN_LIMITS
-                    .STARTER;
-
-            case "Growth":
-
-                return AI_CONFIG
-                    .RESPONSE_TOKEN_LIMITS
-                    .GROWTH;
-
-            case "Premium":
-
-                return AI_CONFIG
-                    .RESPONSE_TOKEN_LIMITS
-                    .PREMIUM;
-
-            case "Enterprise":
-
-                return AI_CONFIG
-                    .RESPONSE_TOKEN_LIMITS
-                    .ENTERPRISE;
-
-            default:
-
-                return AI_CONFIG
-                    .RESPONSE_TOKEN_LIMITS
-                    .STARTER;
-
-        }
+        throw new Error(
+            "Subscription not found."
+        );
 
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Get Plan Configuration
-    |--------------------------------------------------------------------------
-    */
-
-    getPlanConfig(plan = "Starter") {
-
-        const normalizedPlan =
-            this.normalizePlan(plan);
-
-        return {
-
-            plan: normalizedPlan,
-
-            model:
-                this.getModel(
-                    normalizedPlan
-                ),
-
-            maxTokens:
-                this.getTokenLimit(
-                    normalizedPlan
-                )
-
-        };
-
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validate Subscription
-    |--------------------------------------------------------------------------
-    */
-
-    validateSubscription(subscription) {
-
-        if (!subscription) {
-
-            throw new Error(
-                "Subscription not found."
-            );
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Active Flag
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            subscription.isActive === false
-        ) {
-
-            throw new Error(
-                "Subscription is inactive."
-            );
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Subscription Status
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            subscription.status &&
-            [
-                "cancelled",
-                "canceled",
-                "expired",
-                "inactive",
-                "past_due",
-                "unpaid"
-            ].includes(
-                String(
-                    subscription.status
-                ).toLowerCase()
-            )
-        ) {
-
-            throw new Error(
-                "Subscription is not active."
-            );
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Trial Expiration
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            subscription.trialEndsAt &&
-            new Date(
-                subscription.trialEndsAt
-            ).getTime() < Date.now()
-        ) {
-
-            /*
-            |--------------------------------------------------------------------------
-            | If subscription is not paid/active after trial
-            |--------------------------------------------------------------------------
-            */
-
-            const status =
-                String(
-                    subscription.status || ""
-                ).toLowerCase();
-
-            const isPaidActive =
-                subscription.isActive === true &&
-                [
-                    "active",
-                    "trialing",
-                    "paid",
-                    "subscription_active"
-                ].includes(status);
-
-            if (!isPaidActive) {
-
-                throw new Error(
-                    "Free trial has expired."
-                );
-
-            }
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Plan Validation
-        |--------------------------------------------------------------------------
-        */
-
-        const plan =
-            this.normalizePlan(
-                subscription.plan
-            );
-
-        return {
-
-            valid: true,
-
-            plan,
-
-            model:
-                this.getModel(plan),
-
-            maxTokens:
-                this.getTokenLimit(plan)
-
-        };
-
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Check Monthly Token Availability
-    |--------------------------------------------------------------------------
-    |
-    | This is separate from max response tokens.
-    |
-    | monthlyTokensUsed:
-    |     Tokens consumed during billing period.
-    |
-    | monthlyTokenLimit:
-    |     Subscription's monthly usage allowance.
-    |
-    |--------------------------------------------------------------------------
-    */
-
-    checkTokenAvailability(
-
-        subscription,
-
-        estimatedTokens
-
+    if (
+        subscription.isActive === false
     ) {
 
-        if (!subscription) {
-
-            return {
-
-                allowed: false,
-
-                remaining: 0,
-
-                limit: 0,
-
-                used: 0
-
-            };
-
-        }
-
-        const used =
-            Number(
-                subscription.monthlyTokensUsed || 0
-            );
-
-        /*
-        |--------------------------------------------------------------------------
-        | Use subscription-specific monthly limit
-        |--------------------------------------------------------------------------
-        */
-
-        const limit =
-            Number(
-                subscription.monthlyTokenLimit ||
-                subscription.tokenLimit ||
-                0
-            );
-
-        /*
-        |--------------------------------------------------------------------------
-        | If no monthly limit is configured,
-        | do not block here.
-        |
-        | This allows future plan-specific
-        | usage limits to be added through
-        | Subscription model.
-        |--------------------------------------------------------------------------
-        */
-
-        if (limit <= 0) {
-
-            return {
-
-                allowed: true,
-
-                remaining: Infinity,
-
-                limit: null,
-
-                used
-
-            };
-
-        }
-
-        const requested =
-            Math.max(
-                0,
-                Number(
-                    estimatedTokens || 0
-                )
-            );
-
-        return {
-
-            allowed:
-                used + requested <= limit,
-
-            remaining:
-                Math.max(
-                    0,
-                    limit - used
-                ),
-
-            limit,
-
-            used
-
-        };
-
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Get Subscription From Shop
-    |--------------------------------------------------------------------------
-    */
-
-    async loadSubscriptionForShop(shop) {
-
-        if (!shop) {
-
-            return null;
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Subscription already populated
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            shop.subscription &&
-            typeof shop.subscription === "object" &&
-            shop.subscription._id
-        ) {
-
-            return shop.subscription;
-
-        }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Subscription ID
-        |--------------------------------------------------------------------------
-        */
-
-        const subscriptionId =
-            shop.subscription;
-
-        if (!subscriptionId) {
-
-            return null;
-
-        }
-
-        return Subscription.findById(
-            subscriptionId
+        throw new Error(
+            "Subscription is inactive."
         );
 
     }
 
     /*
     |--------------------------------------------------------------------------
-    | Validate Shop Subscription
+    | Optional Status Validation
     |--------------------------------------------------------------------------
     */
 
-    async validateShopSubscription(shop) {
+    if (
+        subscription.status &&
+        [
+            "active",
+            "trialing"
+        ].includes(
+            String(
+                subscription.status
+            ).toLowerCase()
+        ) === false
+    ) {
 
-        const subscription =
-            await this.loadSubscriptionForShop(
-                shop
+        throw new Error(
+            "Subscription is not active."
+        );
+
+    }
+
+    return true;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Check Subscription Token Availability
+|--------------------------------------------------------------------------
+|
+| This function is intentionally defensive because the exact Subscription
+| schema has not been provided yet.
+|
+| It supports common fields if they exist.
+|
+| It does NOT assume that monthlyTokensUsed is the same as max output tokens.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function checkTokenAvailability({
+
+    subscription,
+
+    estimatedTokens = 0,
+
+    monthlyTokenLimit = null
+
+} = {}) {
+
+    validateSubscription(
+        subscription
+    );
+
+    const usedTokens = Number(
+
+        subscription.monthlyTokensUsed ||
+
+        subscription.usage?.monthlyTokensUsed ||
+
+        subscription.usage?.tokensUsed ||
+
+        0
+
+    );
+
+    const configuredLimit =
+
+        monthlyTokenLimit !== null
+
+            ? Number(
+                monthlyTokenLimit
+            )
+
+            : Number(
+
+                subscription.monthlyTokenLimit ||
+
+                subscription.usage?.monthlyTokenLimit ||
+
+                subscription.tokenLimit ||
+
+                0
+
             );
 
-        const validation =
-            this.validateSubscription(
-                subscription
-            );
+    /*
+    |--------------------------------------------------------------------------
+    | If no monthly limit is configured,
+    | do not incorrectly block the request.
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        configuredLimit <= 0
+    ) {
 
         return {
 
-            subscription,
+            allowed: true,
 
-            ...validation
+            used: usedTokens,
+
+            estimated: Number(
+                estimatedTokens
+            ),
+
+            remaining: null,
+
+            limit: null
 
         };
 
     }
 
+    const requestedTokens =
+        Math.max(
+            0,
+            Number(
+                estimatedTokens
+            )
+        );
+
+    const remaining = Math.max(
+
+        0,
+
+        configuredLimit -
+        usedTokens
+
+    );
+
+    return {
+
+        allowed:
+
+            usedTokens +
+            requestedTokens <=
+            configuredLimit,
+
+        used:
+            usedTokens,
+
+        estimated:
+            requestedTokens,
+
+        remaining,
+
+        limit:
+            configuredLimit
+
+    };
+
 }
 
-/*
-|--------------------------------------------------------------------------
-| Singleton Instance
-|--------------------------------------------------------------------------
-*/
-
-const aiService =
-    new AIService();
-
-export default aiService;
 
 /*
 |--------------------------------------------------------------------------
@@ -728,9 +424,7 @@ export default aiService;
 */
 
 export async function loadConversation(
-
     conversationId
-
 ) {
 
     if (!conversationId) {
@@ -739,17 +433,20 @@ export async function loadConversation(
 
     }
 
-    return Conversation.findById(
+    const conversation =
 
-        conversationId
+        await Conversation.findById(
+            conversationId
+        )
+            .populate("shop")
+            .populate("visitor")
+            .populate("subscription")
+            .lean();
 
-    )
-        .populate("shop")
-        .populate("visitor")
-        .populate("merchant")
-        .populate("subscription");
+    return conversation || null;
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -758,9 +455,7 @@ export async function loadConversation(
 */
 
 export async function loadVisitor(
-
     visitorId
-
 ) {
 
     if (!visitorId) {
@@ -769,13 +464,16 @@ export async function loadVisitor(
 
     }
 
-    return Visitor.findById(
+    const visitor =
 
-        visitorId
+        await Visitor.findById(
+            visitorId
+        ).lean();
 
-    );
+    return visitor || null;
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -784,9 +482,7 @@ export async function loadVisitor(
 */
 
 export async function loadShop(
-
     shopId
-
 ) {
 
     if (!shopId) {
@@ -795,13 +491,16 @@ export async function loadShop(
 
     }
 
-    return Shop.findById(
+    const shop =
 
-        shopId
+        await Shop.findById(
+            shopId
+        ).lean();
 
-    );
+    return shop || null;
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -810,9 +509,7 @@ export async function loadShop(
 */
 
 export async function loadSubscription(
-
     subscriptionId
-
 ) {
 
     if (!subscriptionId) {
@@ -821,13 +518,16 @@ export async function loadSubscription(
 
     }
 
-    return Subscription.findById(
+    const subscription =
 
-        subscriptionId
+        await Subscription.findById(
+            subscriptionId
+        ).lean();
 
-    );
+    return subscription || null;
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -835,13 +535,13 @@ export async function loadSubscription(
 |--------------------------------------------------------------------------
 */
 
-export async function loadProducts(
+export async function loadProducts({
 
     shopId,
 
     limit = 100
 
-) {
+} = {}) {
 
     if (!shopId) {
 
@@ -849,48 +549,60 @@ export async function loadProducts(
 
     }
 
-    const safeLimit =
-        Math.min(
-            Math.max(
-                Number(limit) || 100,
-                1
-            ),
-            500
-        );
+    const safeLimit = Math.min(
 
-    return Product.find({
+        Math.max(
+            Number(limit) || 100,
+            1
+        ),
 
-        shop: shopId,
+        500
 
-        status: "active",
+    );
 
-        deleted: false
+    const products =
 
-    })
-        .sort({
+        await Product.find({
 
-            featured: -1,
+            shop: shopId,
 
-            totalSales: -1,
+            status: "active",
 
-            createdAt: -1
+            deleted: false
 
         })
-        .limit(safeLimit)
-        .lean();
+            .sort({
+
+                featured: -1,
+
+                totalSales: -1,
+
+                createdAt: -1
+
+            })
+            .limit(
+                safeLimit
+            )
+            .lean();
+
+    return products || [];
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
 | Build Product Context
 |--------------------------------------------------------------------------
+|
+| Converts database product documents into the smaller product structure
+| used by PromptService.
+|
+|--------------------------------------------------------------------------
 */
 
 export function buildProductContext(
-
     products = []
-
 ) {
 
     if (
@@ -902,7 +614,6 @@ export function buildProductContext(
     }
 
     return products.map(
-
         product => ({
 
             id:
@@ -919,6 +630,11 @@ export function buildProductContext(
 
             vendor:
                 product.vendor || "",
+
+            /*
+            | PromptService expects productType.
+            | Keep this field name consistent with PromptService.
+            */
 
             productType:
                 product.productType || "",
@@ -959,21 +675,21 @@ export function buildProductContext(
                     product.featured
                 ),
 
-            available:
-                product.inventoryQuantity == null
-                    ? true
-                    : product.inventoryQuantity > 0,
-
-            image:
+            featuredImage:
                 product.featuredImage ||
                 product.image ||
+                "",
+
+            image:
+                product.image ||
+                product.featuredImage ||
                 ""
 
         })
-
     );
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -982,11 +698,7 @@ export function buildProductContext(
 */
 
 export async function buildMemoryContext(
-
-    conversation,
-
-    visitor = null
-
+    conversation
 ) {
 
     if (!conversation) {
@@ -1005,51 +717,29 @@ export async function buildMemoryContext(
 
     try {
 
-        if (
-            typeof MemoryService
-                .buildAIMemory !==
-            "function"
-        ) {
+        const memory =
 
-            return {
-
-                memory: [],
-
-                preferences: {},
-
-                history: []
-
-            };
-
-        }
-
-        const result =
-            await MemoryService
-                .buildAIMemory(
-
-                    conversation,
-
-                    visitor
-
-                );
+            await MemoryService.buildAIMemory(
+                conversation
+            );
 
         return {
 
             memory:
                 Array.isArray(
-                    result?.memory
+                    memory?.memory
                 )
-                    ? result.memory
+                    ? memory.memory
                     : [],
 
             preferences:
-                result?.preferences || {},
+                memory?.preferences || {},
 
             history:
                 Array.isArray(
-                    result?.history
+                    memory?.history
                 )
-                    ? result.history
+                    ? memory.history
                     : []
 
         };
@@ -1057,19 +747,14 @@ export async function buildMemoryContext(
     } catch (error) {
 
         logger.error(
-
             "AI memory context failed",
-
             {
-
-                message:
+                error:
                     error.message,
 
                 conversationId:
-                    conversation?._id
-
+                    conversation._id
             }
-
         );
 
         return {
@@ -1086,71 +771,30 @@ export async function buildMemoryContext(
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Build Complete AI Context
+|--------------------------------------------------------------------------
+|
+| Loads all information required to construct an AI request.
+|
 |--------------------------------------------------------------------------
 */
 
 export async function buildAIContext({
 
-    conversationId = null,
+    conversationId,
 
-    visitorId = null,
+    visitorId,
 
-    shopId = null
+    shopId,
+
+    productLimit = 100
 
 } = {}) {
 
-    const conversation =
-        await loadConversation(
-
-            conversationId
-
-        );
-
-    const visitor =
-        visitorId
-            ? await loadVisitor(
-                visitorId
-            )
-            : conversation?.visitor || null;
-
-    const shop =
-        shopId
-            ? await loadShop(
-                shopId
-            )
-            : conversation?.shop || null;
-
-    const subscription =
-        conversation?.subscription ||
-        (
-            shop
-                ? await aiService
-                    .loadSubscriptionForShop(
-                        shop
-                    )
-                : null
-        );
-
-    const products =
-        shop?._id
-            ? await loadProducts(
-                shop._id
-            )
-            : [];
-
-    const memory =
-        await buildMemoryContext(
-
-            conversation,
-
-            visitor
-
-        );
-
-    return {
+    const [
 
         conversation,
 
@@ -1158,7 +802,75 @@ export async function buildAIContext({
 
         shop,
 
-        subscription,
+        products
+
+    ] = await Promise.all([
+
+        loadConversation(
+            conversationId
+        ),
+
+        loadVisitor(
+            visitorId
+        ),
+
+        loadShop(
+            shopId
+        ),
+
+        loadProducts({
+
+            shopId,
+
+            limit:
+                productLimit
+
+        })
+
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prefer populated conversation objects
+    | when available.
+    |--------------------------------------------------------------------------
+    */
+
+    const resolvedVisitor =
+
+        visitor ||
+        conversation?.visitor ||
+        null;
+
+    const resolvedShop =
+
+        shop ||
+        conversation?.shop ||
+        null;
+
+    const resolvedSubscription =
+
+        conversation?.subscription ||
+        null;
+
+    const memory =
+
+        await buildMemoryContext(
+            conversation
+        );
+
+    return {
+
+        conversation,
+
+        visitor:
+            resolvedVisitor,
+
+        shop:
+            resolvedShop,
+
+        subscription:
+            resolvedSubscription,
 
         products:
             buildProductContext(
@@ -1171,6 +883,7 @@ export async function buildAIContext({
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Analyze Customer Intent
@@ -1179,11 +892,9 @@ export async function buildAIContext({
 
 export async function analyzeCustomerIntent({
 
-    conversation = null,
+    conversation,
 
-    message = "",
-
-    customer = null
+    message
 
 } = {}) {
 
@@ -1212,40 +923,20 @@ export async function analyzeCustomerIntent({
 
     try {
 
-        if (
-            !IntentService ||
-            typeof IntentService
-                .analyzeConversation !==
-            "function"
-        ) {
-
-            return {
-
-                intent: "unknown",
-
-                confidence: 0,
-
-                sentiment: "neutral",
-
-                sentimentScore: 50,
-
-                customerStage: "visitor",
-
-                entities: {}
-
-            };
-
-        }
+        /*
+        |--------------------------------------------------------------------------
+        | IntentService is the single owner of intent analysis.
+        |--------------------------------------------------------------------------
+        */
 
         const analysis =
+
             await IntentService
                 .analyzeConversation(
 
                     conversation,
 
-                    message,
-
-                    customer
+                    String(message).trim()
 
                 );
 
@@ -1266,7 +957,8 @@ export async function analyzeCustomerIntent({
 
             sentimentScore:
                 Number(
-                    analysis?.sentimentScore ?? 50
+                    analysis?.sentimentScore ??
+                    50
                 ),
 
             customerStage:
@@ -1284,11 +976,11 @@ export async function analyzeCustomerIntent({
 
         logger.error(
 
-            "Intent analysis failed",
+            "Customer intent analysis failed",
 
             {
 
-                message:
+                error:
                     error.message,
 
                 conversationId:
@@ -1297,6 +989,12 @@ export async function analyzeCustomerIntent({
             }
 
         );
+
+        /*
+        |--------------------------------------------------------------------------
+        | AI chat should continue even if optional intent analysis fails.
+        |--------------------------------------------------------------------------
+        */
 
         return {
 
@@ -1318,6 +1016,7 @@ export async function analyzeCustomerIntent({
 
 }
 
+
 /*
 |--------------------------------------------------------------------------
 | Generate Product Recommendations
@@ -1326,25 +1025,37 @@ export async function analyzeCustomerIntent({
 
 export async function generateRecommendations({
 
-    conversation = null,
+    conversation,
 
-    shop = null,
+    shop,
 
     currentProduct = null,
 
     cartItems = [],
 
-    customer = null
+    limit = AI_CONFIG.MAX_RECOMMENDATIONS
 
 } = {}) {
 
+    if (!shop?._id) {
+
+        return [];
+
+    }
+
+    const safeLimit = Math.min(
+
+        Math.max(
+            Number(limit) ||
+            AI_CONFIG.MAX_RECOMMENDATIONS,
+            1
+        ),
+
+        AI_CONFIG.MAX_RECOMMENDATIONS
+
+    );
+
     try {
-
-        if (!shop?._id) {
-
-            return [];
-
-        }
 
         /*
         |--------------------------------------------------------------------------
@@ -1354,33 +1065,29 @@ export async function generateRecommendations({
 
         if (currentProduct) {
 
-            if (
-                typeof RecommendationService
-                    .recommendSimilarProducts ===
-                "function"
-            ) {
+            const recommendations =
 
-                const products =
-                    await RecommendationService
-                        .recommendSimilarProducts(
+                await RecommendationService
+                    .recommendSimilarProducts(
 
-                            currentProduct
+                        currentProduct
 
-                        );
+                    );
 
-                return Array.isArray(products)
+            return Array.isArray(
+                recommendations
+            )
 
-                    ? products.slice(
+                ? recommendations
+                    .slice(
                         0,
-                        AI_CONFIG
-                            .MAX_RECOMMENDATIONS
+                        safeLimit
                     )
 
-                    : [];
-
-            }
+                : [];
 
         }
+
 
         /*
         |--------------------------------------------------------------------------
@@ -1389,39 +1096,37 @@ export async function generateRecommendations({
         */
 
         if (
-            Array.isArray(cartItems) &&
+            Array.isArray(
+                cartItems
+            ) &&
             cartItems.length > 0
         ) {
 
-            if (
-                typeof RecommendationService
-                    .recommendCartProducts ===
-                "function"
-            ) {
+            const recommendations =
 
-                const products =
-                    await RecommendationService
-                        .recommendCartProducts(
+                await RecommendationService
+                    .recommendCartProducts(
 
-                            cartItems,
+                        cartItems,
 
-                            shop._id
+                        shop._id
 
-                        );
+                    );
 
-                return Array.isArray(products)
+            return Array.isArray(
+                recommendations
+            )
 
-                    ? products.slice(
+                ? recommendations
+                    .slice(
                         0,
-                        AI_CONFIG
-                            .MAX_RECOMMENDATIONS
+                        safeLimit
                     )
 
-                    : [];
-
-            }
+                : [];
 
         }
+
 
         /*
         |--------------------------------------------------------------------------
@@ -1429,47 +1134,44 @@ export async function generateRecommendations({
         |--------------------------------------------------------------------------
         */
 
-        if (
-            typeof RecommendationService
-                .recommendForCustomer ===
-            "function"
-        ) {
+        if (!conversation) {
 
-            const products =
-                await RecommendationService
-                    .recommendForCustomer(
-
-                        conversation,
-
-                        shop._id,
-
-                        customer
-
-                    );
-
-            return Array.isArray(products)
-
-                ? products.slice(
-                    0,
-                    AI_CONFIG
-                        .MAX_RECOMMENDATIONS
-                )
-
-                : [];
+            return [];
 
         }
 
-        return [];
+        const recommendations =
+
+            await RecommendationService
+                .recommendForCustomer(
+
+                    conversation,
+
+                    shop._id
+
+                );
+
+        return Array.isArray(
+            recommendations
+        )
+
+            ? recommendations
+                .slice(
+                    0,
+                    safeLimit
+                )
+
+            : [];
 
     } catch (error) {
 
         logger.error(
 
-            "Recommendation generation failed",
+            "Product recommendation generation failed",
 
             {
 
-                message:
+                error:
                     error.message,
 
                 shopId:
@@ -1482,11 +1184,18 @@ export async function generateRecommendations({
 
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Recommendation failure must not break AI chat.
+        |--------------------------------------------------------------------------
+        */
+
         return [];
 
     }
 
 }
+
 
 /*
 |--------------------------------------------------------------------------
@@ -1508,15 +1217,15 @@ export async function buildPrompt({
 
     customer = {},
 
-    conversation = null,
-
     products = [],
 
     collection = {},
 
     currentPage = {},
 
-    cart = {}
+    cart = {},
+
+    conversation = null
 
 } = {}) {
 
@@ -1524,88 +1233,89 @@ export async function buildPrompt({
 
         /*
         |--------------------------------------------------------------------------
-        | Build Customer Memory
+        | Build memory from the actual conversation.
         |--------------------------------------------------------------------------
         */
 
         const memoryContext =
+
             await buildMemoryContext(
-
-                conversation,
-
-                customer
-
+                conversation
             );
+
 
         /*
         |--------------------------------------------------------------------------
-        | Build Complete Prompt
+        | Respect the configured conversation history limit.
         |--------------------------------------------------------------------------
         */
 
-        if (
-            !PromptService ||
-            typeof PromptService
-                .buildSystemPrompt !==
-            "function"
-        ) {
+        const history =
 
-            throw new Error(
+            Array.isArray(
+                memoryContext.history
+            )
 
-                "PromptService.buildSystemPrompt is unavailable."
+                ? memoryContext.history.slice(
 
+                    -AI_CONFIG.HISTORY_MESSAGES
+
+                )
+
+                : [];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Normalize products before passing to PromptService.
+        |--------------------------------------------------------------------------
+        */
+
+        const productContext =
+
+            buildProductContext(
+                products
             );
 
-        }
 
-        const systemPrompt =
-            PromptService
-                .buildSystemPrompt({
+        /*
+        |--------------------------------------------------------------------------
+        | PromptService owns the actual system-prompt construction.
+        |--------------------------------------------------------------------------
+        */
 
-                    plan,
+        return PromptService
+            .buildSystemPrompt({
 
-                    merchant,
+                plan,
 
-                    store:
-                        shop,
+                merchant,
 
-                    policies,
+                store:
+                    shop,
 
-                    brand,
+                policies,
 
-                    customer,
+                brand,
 
-                    products,
+                customer,
 
-                    collection,
+                products:
+                    productContext,
 
-                    page:
-                        currentPage,
+                collection,
 
-                    cart,
+                page:
+                    currentPage,
 
-                    memory:
-                        memoryContext.memory,
+                cart,
 
-                    history:
-                        memoryContext.history
+                memory:
+                    memoryContext.memory,
 
-                });
+                history
 
-        return {
-
-            systemPrompt,
-
-            memory:
-                memoryContext.memory,
-
-            preferences:
-                memoryContext.preferences,
-
-            history:
-                memoryContext.history
-
-        };
+            });
 
     } catch (error) {
 
@@ -1615,7 +1325,7 @@ export async function buildPrompt({
 
             {
 
-                message:
+                error:
                     error.message
 
             }
@@ -1628,6 +1338,80 @@ export async function buildPrompt({
 
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| Part 1 Exports
+|--------------------------------------------------------------------------
+|
+| The final AIService object will be assembled in Part 4.
+| Do not create the default export here because the remaining parts
+| still need to attach the orchestration functions.
+|
+|--------------------------------------------------------------------------
+*/
+
+export default {
+
+    normalizePlan,
+
+    getModelForPlan,
+
+    getMaxTokensForPlan,
+
+    getPlanConfiguration,
+
+    validateSubscription,
+
+    checkTokenAvailability,
+
+    loadConversation,
+
+    loadVisitor,
+
+    loadShop,
+
+    loadSubscription,
+
+    loadProducts,
+
+    buildProductContext,
+
+    buildMemoryContext,
+
+    buildAIContext,
+
+    analyzeCustomerIntent,
+
+    generateRecommendations,
+
+    buildPrompt
+
+};
+/*
+|--------------------------------------------------------------------------
+| ai.service.js
+|--------------------------------------------------------------------------
+| Part 2
+|--------------------------------------------------------------------------
+|
+| Includes:
+|
+| - Conversation History
+| - OpenAI Chat Request
+| - Retry Logic
+| - Response Parsing
+| - AI Request Wrapper
+| - AI Error Handling
+| - Save Assistant Message
+| - Update Conversation
+| - Update Conversation Analytics
+| - Update Customer Memory
+|
+|--------------------------------------------------------------------------
+*/
+
+
 /*
 |--------------------------------------------------------------------------
 | Load Conversation History
@@ -1636,7 +1420,9 @@ export async function buildPrompt({
 
 export async function loadConversationHistory(
 
-    conversationId
+    conversationId,
+
+    limit = AI_CONFIG.HISTORY_MESSAGES
 
 ) {
 
@@ -1648,17 +1434,8 @@ export async function loadConversationHistory(
 
     try {
 
-        if (
-            typeof MemoryService
-                .getConversationContext !==
-            "function"
-        ) {
-
-            return [];
-
-        }
-
         const history =
+
             await MemoryService
                 .getConversationContext(
 
@@ -1674,9 +1451,22 @@ export async function loadConversationHistory(
 
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Return only the latest configured number of messages.
+        |--------------------------------------------------------------------------
+        */
+
         return history.slice(
 
-            -AI_CONFIG.HISTORY_MESSAGES
+            -Math.max(
+
+                1,
+
+                Number(limit) ||
+                AI_CONFIG.HISTORY_MESSAGES
+
+            )
 
         );
 
@@ -1688,7 +1478,7 @@ export async function loadConversationHistory(
 
             {
 
-                message:
+                error:
                     error.message,
 
                 conversationId
@@ -1703,33 +1493,1261 @@ export async function loadConversationHistory(
 
 }
 
-/*
-|--------------------------------------------------------------------------
-| Named Service Exports
-|--------------------------------------------------------------------------
-*/
-
-export {
-
-    AIService
-
-};
 
 /*
 |--------------------------------------------------------------------------
-| Default Export
+| Generate OpenAI Response
+|--------------------------------------------------------------------------
+|
+| This is the only AI request entry point used by ai.service.js.
+|
+| The actual OpenAI SDK call is handled by OpenAIService.
+|
 |--------------------------------------------------------------------------
 */
 
-export {
+export async function generateAIResponse({
 
-    aiService as AIServiceInstance
+    plan = "Starter",
 
-};
+    input,
 
-export {
+    systemPrompt = "",
 
-    aiService
+    temperature = AI_CONFIG.TEMPERATURE,
 
-};
+    maxTokens = null,
 
+    tools = [],
+
+    metadata = {}
+
+} = {}) {
+
+    if (
+        !input
+    ) {
+
+        throw new Error(
+
+            "AI input is required."
+
+        );
+
+    }
+
+    const normalizedPlan =
+
+        normalizePlan(
+
+            plan
+
+        );
+
+    const configuredMaxTokens =
+
+        maxTokens ||
+
+        getMaxTokensForPlan(
+
+            normalizedPlan
+
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Prevent callers from exceeding the plan's configured output limit.
+    |--------------------------------------------------------------------------
+    */
+
+    const safeMaxTokens = Math.min(
+
+        Number(
+            configuredMaxTokens
+        ),
+
+        getMaxTokensForPlan(
+
+            normalizedPlan
+
+        )
+
+    );
+
+    try {
+
+        const result =
+
+            await OpenAIService
+                .safeGenerateResponse({
+
+                    plan:
+                        normalizedPlan,
+
+                    input,
+
+                    systemPrompt,
+
+                    temperature,
+
+                    maxTokens:
+                        safeMaxTokens,
+
+                    tools,
+
+                    metadata
+
+                });
+
+        return result;
+
+    } catch (error) {
+
+        throw handleAIError(
+
+            error
+
+        );
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Generate Streaming AI Response
+|--------------------------------------------------------------------------
+|
+| Returns the OpenAI Responses API stream.
+|
+| The caller is responsible for consuming and sending stream events
+| to the client.
+|
+|--------------------------------------------------------------------------
+*/
+
+export async function generateStreamingAIResponse({
+
+    plan = "Starter",
+
+    input,
+
+    systemPrompt = "",
+
+    temperature = AI_CONFIG.TEMPERATURE,
+
+    maxTokens = null,
+
+    tools = [],
+
+    metadata = {}
+
+} = {}) {
+
+    if (
+        !input
+    ) {
+
+        throw new Error(
+
+            "AI input is required."
+
+        );
+
+    }
+
+    const normalizedPlan =
+
+        normalizePlan(
+
+            plan
+
+        );
+
+    const configuredMaxTokens =
+
+        maxTokens ||
+
+        getMaxTokensForPlan(
+
+            normalizedPlan
+
+        );
+
+    const safeMaxTokens =
+
+        Math.min(
+
+            Number(
+                configuredMaxTokens
+            ),
+
+            getMaxTokensForPlan(
+
+                normalizedPlan
+
+            )
+
+        );
+
+    try {
+
+        return await OpenAIService
+            .streamResponse({
+
+                plan:
+                    normalizedPlan,
+
+                input,
+
+                systemPrompt,
+
+                temperature,
+
+                maxTokens:
+                    safeMaxTokens,
+
+                tools,
+
+                metadata
+
+            });
+
+    } catch (error) {
+
+        throw handleAIError(
+
+            error
+
+        );
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Retry Logic
+|--------------------------------------------------------------------------
+|
+| Uses OpenAIService.retryRequest().
+|
+| This avoids duplicating retry logic in multiple places.
+|
+|--------------------------------------------------------------------------
+*/
+
+export async function executeWithRetry(
+
+    operation,
+
+    retries = AI_CONFIG.MAX_RETRIES
+
+) {
+
+    if (
+        typeof operation !==
+        "function"
+    ) {
+
+        throw new TypeError(
+
+            "AI operation must be a function."
+
+        );
+
+    }
+
+    return OpenAIService
+        .retryRequest(
+
+            operation,
+
+            retries
+
+        );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Parse OpenAI Response
+|--------------------------------------------------------------------------
+|
+| Converts the OpenAIService response into a stable internal structure.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function parseAIResponse(
+
+    result = {}
+
+) {
+
+    const response =
+
+        result.response ||
+
+        result;
+
+    const outputText =
+
+        result.outputText ||
+
+        response?.output_text ||
+
+        "";
+
+    const usage =
+
+        result.usage ||
+
+        OpenAIService
+            .extractUsage(
+
+                response
+
+            );
+
+    return {
+
+        success:
+            result.success !== false,
+
+        id:
+            response?.id ||
+            null,
+
+        model:
+            result.model ||
+            response?.model ||
+            null,
+
+        provider:
+            "openai",
+
+        content:
+            outputText,
+
+        finishReason:
+            response?.status ||
+            "completed",
+
+        usage: {
+
+            inputTokens:
+                usage?.inputTokens ||
+                0,
+
+            outputTokens:
+                usage?.outputTokens ||
+                0,
+
+            totalTokens:
+                usage?.totalTokens ||
+                0
+
+        },
+
+        cost:
+            result.cost ||
+
+            OpenAIService
+                .calculateEstimatedCost(
+
+                    result.model ||
+                    response?.model,
+
+                    usage
+
+                ),
+
+        raw:
+            response
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AI Request
+|--------------------------------------------------------------------------
+|
+| High-level AI request wrapper.
+|
+|--------------------------------------------------------------------------
+*/
+
+export async function requestAI({
+
+    plan = "Starter",
+
+    input,
+
+    systemPrompt = "",
+
+    temperature = AI_CONFIG.TEMPERATURE,
+
+    maxTokens = null,
+
+    tools = [],
+
+    metadata = {}
+
+} = {}) {
+
+    const result =
+
+        await generateAIResponse({
+
+            plan,
+
+            input,
+
+            systemPrompt,
+
+            temperature,
+
+            maxTokens,
+
+            tools,
+
+            metadata
+
+        });
+
+    return parseAIResponse(
+
+        result
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| AI Error Handler
+|--------------------------------------------------------------------------
+|
+| Converts provider errors into safe application-level errors.
+|
+| Original provider details are logged but are not exposed to customers.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function handleAIError(
+
+    error
+
+) {
+
+    if (!error) {
+
+        return new Error(
+
+            "AI request failed."
+
+        );
+
+    }
+
+    logger.error(
+
+        "AI request failed",
+
+        {
+
+            message:
+                error.message,
+
+            code:
+                error.code,
+
+            status:
+                error.status,
+
+            type:
+                error.type,
+
+            requestId:
+                error.requestID ||
+
+                error.request_id ||
+
+                null
+
+        }
+
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Limit
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+
+        error.status === 429 ||
+
+        error.code ===
+            "rate_limit_exceeded"
+
+    ) {
+
+        return new Error(
+
+            "AI service is temporarily busy. Please try again shortly."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication / API Key
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+
+        error.status === 401 ||
+
+        error.status === 403
+
+    ) {
+
+        return new Error(
+
+            "AI service configuration error."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Server / Provider Failure
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+
+        error.status >= 500
+
+    ) {
+
+        return new Error(
+
+            "AI service is temporarily unavailable."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Timeout
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+
+        error.code ===
+            "ETIMEDOUT" ||
+
+        error.code ===
+            "ECONNRESET" ||
+
+        error.code ===
+            "TIMEOUT"
+
+    ) {
+
+        return new Error(
+
+            "AI request timed out. Please try again."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generic Error
+    |--------------------------------------------------------------------------
+    */
+
+    return new Error(
+
+        error.message ||
+
+        "AI request failed."
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Save Assistant Message
+|--------------------------------------------------------------------------
+*/
+
+export async function saveAssistantMessage({
+
+    conversation,
+
+    shop,
+
+    visitor,
+
+    content,
+
+    ai = {},
+
+    recommendations = [],
+
+    actions = [],
+
+    quickReplies = []
+
+} = {}) {
+
+    if (
+        !conversation?._id
+    ) {
+
+        throw new Error(
+
+            "Conversation is required to save assistant message."
+
+        );
+
+    }
+
+    if (
+        !shop?._id
+    ) {
+
+        throw new Error(
+
+            "Shop is required to save assistant message."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Visitor may be optional for guest sessions depending on schema.
+    |--------------------------------------------------------------------------
+    */
+
+    const messageData = {
+
+        conversation:
+            conversation._id,
+
+        shop:
+            shop._id,
+
+        role:
+            "assistant",
+
+        messageType:
+            "text",
+
+        messageId:
+            crypto.randomUUID(),
+
+        sequence:
+            Number(
+                conversation.totalMessages || 0
+            ) + 1,
+
+        content:
+            String(
+                content || ""
+            ),
+
+        sender: {
+
+            senderType:
+                "AI",
+
+            name:
+                "Layboka AI",
+
+            source:
+                "ai"
+
+        },
+
+        ai,
+
+        productCards:
+            Array.isArray(
+                recommendations
+            )
+                ? recommendations
+                : [],
+
+        actions:
+            Array.isArray(
+                actions
+            )
+                ? actions
+                : [],
+
+        quickReplies:
+            Array.isArray(
+                quickReplies
+            )
+                ? quickReplies
+                : [],
+
+        delivery: {
+
+            status:
+                "sent",
+
+            deliveredAt:
+                new Date()
+
+        }
+
+    };
+
+    /*
+    |--------------------------------------------------------------------------
+    | Only attach visitor when available.
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        visitor?._id
+    ) {
+
+        messageData.visitor =
+            visitor._id;
+
+    }
+
+    const message =
+
+        await Message.create(
+
+            messageData
+
+        );
+
+    return message;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Update Conversation After AI Response
+|--------------------------------------------------------------------------
+*/
+
+export async function updateConversationAfterResponse({
+
+    conversation,
+
+    aiUsage = {}
+
+} = {}) {
+
+    if (
+        !conversation
+    ) {
+
+        throw new Error(
+
+            "Conversation is required."
+
+        );
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize numeric usage values.
+    |--------------------------------------------------------------------------
+    */
+
+    const promptTokens =
+
+        Number(
+
+            aiUsage.promptTokens ||
+
+            aiUsage.inputTokens ||
+
+            0
+
+        );
+
+    const completionTokens =
+
+        Number(
+
+            aiUsage.completionTokens ||
+
+            aiUsage.outputTokens ||
+
+            0
+
+        );
+
+    const totalTokens =
+
+        Number(
+
+            aiUsage.totalTokens ||
+
+            promptTokens +
+            completionTokens
+
+        );
+
+    const responseTime =
+
+        Number(
+
+            aiUsage.responseTime ||
+
+            0
+
+        );
+
+    const estimatedCost =
+
+        Number(
+
+            aiUsage.estimatedCost ||
+
+            aiUsage.totalCost ||
+
+            0
+
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Conversation Counters
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.totalMessages =
+
+        Number(
+
+            conversation.totalMessages ||
+
+            0
+
+        ) + 1;
+
+    conversation.aiMessages =
+
+        Number(
+
+            conversation.aiMessages ||
+
+            0
+
+        ) + 1;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Activity
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.lastMessageAt =
+
+        new Date();
+
+    conversation.status =
+
+        "active";
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token Usage
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.promptTokens =
+
+        Number(
+
+            conversation.promptTokens ||
+
+            0
+
+        ) + promptTokens;
+
+    conversation.completionTokens =
+
+        Number(
+
+            conversation.completionTokens ||
+
+            0
+
+        ) + completionTokens;
+
+    conversation.totalTokens =
+
+        Number(
+
+            conversation.totalTokens ||
+
+            0
+
+        ) + totalTokens;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cost
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.estimatedCost =
+
+        Number(
+
+            conversation.estimatedCost ||
+
+            0
+
+        ) + estimatedCost;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | API Calls
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.apiCalls =
+
+        Number(
+
+            conversation.apiCalls ||
+
+            0
+
+        ) + 1;
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Response Time
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.averageResponseTime =
+
+        responseTime;
+
+
+    await conversation.save();
+
+
+    return conversation;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Update Conversation Analytics
+|--------------------------------------------------------------------------
+*/
+
+export async function updateConversationAnalytics({
+
+    conversation,
+
+    recommendations = []
+
+} = {}) {
+
+    if (
+        !conversation
+    ) {
+
+        return null;
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ensure analytics object exists.
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !conversation.analytics
+    ) {
+
+        conversation.analytics = {};
+
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Recommended Products
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.analytics
+        .productsRecommended =
+
+        Number(
+
+            conversation.analytics
+                .productsRecommended ||
+
+            0
+
+        ) +
+
+        (
+            Array.isArray(
+                recommendations
+            )
+
+                ? recommendations.length
+
+                : 0
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Engagement Score
+    |--------------------------------------------------------------------------
+    */
+
+    conversation.analytics
+        .engagementScore =
+
+        Number(
+
+            conversation.analytics
+                .engagementScore ||
+
+            0
+
+        ) + 1;
+
+
+    await conversation.save();
+
+
+    return conversation;
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Update Customer Memory
+|--------------------------------------------------------------------------
+|
+| Stores both visitor and assistant messages in the memory system.
+|
+|--------------------------------------------------------------------------
+*/
+
+export async function updateCustomerMemory({
+
+    conversation,
+
+    visitor,
+
+    userMessage,
+
+    assistantMessage
+
+} = {}) {
+
+    if (
+        !conversation
+    ) {
+
+        return {
+
+            memory: [],
+
+            preferences: {},
+
+            history: []
+
+        };
+
+    }
+
+    try {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Learn visitor message.
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            userMessage &&
+            String(
+                userMessage
+            ).trim()
+        ) {
+
+            await MemoryService
+                .learnFromConversation(
+
+                    conversation,
+
+                    {
+
+                        role:
+                            "visitor",
+
+                        content:
+                            String(
+                                userMessage
+                            ).trim()
+
+                    }
+
+                );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Learn assistant message.
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            assistantMessage &&
+            String(
+                assistantMessage
+            ).trim()
+        ) {
+
+            await MemoryService
+                .learnFromConversation(
+
+                    conversation,
+
+                    {
+
+                        role:
+                            "assistant",
+
+                        content:
+                            String(
+                                assistantMessage
+                            ).trim()
+
+                    }
+
+                );
+
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Rebuild AI memory after learning.
+        |--------------------------------------------------------------------------
+        */
+
+        const updatedMemory =
+
+            await MemoryService
+                .buildAIMemory(
+
+                    conversation,
+
+                    visitor
+
+                );
+
+        return {
+
+            memory:
+                updatedMemory?.memory ||
+                [],
+
+            preferences:
+                updatedMemory?.preferences ||
+                {},
+
+            history:
+                updatedMemory?.history ||
+                []
+
+        };
+
+    } catch (error) {
+
+        logger.error(
+
+            "Customer memory update failed",
+
+            {
+
+                error:
+                    error.message,
+
+                conversationId:
+                    conversation?._id
+
+            }
+
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Memory is an enhancement.
+        | Do not fail the completed AI response because memory failed.
+        |--------------------------------------------------------------------------
+        */
+
+        return {
+
+            memory: [],
+
+            preferences: {},
+
+            history: []
+
+        };
+
+    }
+
+}
