@@ -2751,3 +2751,1334 @@ export async function updateCustomerMemory({
     }
 
 }
+/*
+|--------------------------------------------------------------------------
+| ai.service.js
+|--------------------------------------------------------------------------
+| Part 3
+|--------------------------------------------------------------------------
+|
+| Includes:
+|
+| - Product Cards
+| - Quick Replies
+| - Actions
+| - Cart Recovery
+| - Upsell Response
+| - Cross-Sell Response
+| - AI Response Formatting
+| - Token Usage Calculation
+| - AI Cost Calculation
+| - AI Request Logging
+| - Performance Metrics
+|
+|--------------------------------------------------------------------------
+*/
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Product Cards
+|--------------------------------------------------------------------------
+|
+| Converts recommendation/product objects into a frontend-friendly format.
+|
+| This structure can be consumed by the Layboka AI storefront widget.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildProductCards(
+
+    products = []
+
+) {
+
+    if (
+        !Array.isArray(products)
+    ) {
+
+        return [];
+
+    }
+
+    return products.map(
+
+        product => ({
+
+            id:
+                product._id ||
+                product.id ||
+                null,
+
+            shopifyProductId:
+                product.shopifyProductId ||
+                null,
+
+            title:
+                product.title ||
+                "",
+
+            description:
+
+                product.shortDescription ||
+
+                product.description ||
+
+                "",
+
+            handle:
+                product.handle ||
+                "",
+
+            image:
+
+                product.featuredImage ||
+
+                product.image ||
+
+                "",
+
+            price:
+                product.price ??
+                0,
+
+            compareAtPrice:
+                product.compareAtPrice ??
+                null,
+
+            currency:
+                product.currency ||
+                "USD",
+
+            vendor:
+                product.vendor ||
+                "",
+
+            available:
+
+                product.available !== undefined
+
+                    ? Boolean(
+                        product.available
+                    )
+
+                    : Number(
+                        product.inventoryQuantity ||
+                        product.inventory ||
+                        0
+                    ) > 0,
+
+            inventory:
+
+                product.inventoryQuantity ??
+
+                product.inventory ??
+
+                null,
+
+            url:
+
+                product.url ||
+
+                (
+                    product.handle
+
+                        ? `/products/${product.handle}`
+
+                        : ""
+                ),
+
+            recommendationReason:
+
+                product.recommendationReason ||
+
+                "",
+
+            recommendationScore:
+
+                Number(
+
+                    product.recommendationScore ||
+
+                    0
+
+                )
+
+        })
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Quick Replies
+|--------------------------------------------------------------------------
+|
+| Creates contextual quick-reply buttons for the AI widget.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildQuickReplies(
+
+    intent = "unknown"
+
+) {
+
+    /*
+    |--------------------------------------------------------------------------
+    | Normalize intent.
+    |--------------------------------------------------------------------------
+    */
+
+    const normalizedIntent =
+
+        String(
+
+            typeof intent === "object"
+
+                ? intent?.intent ||
+
+                  "unknown"
+
+                : intent
+
+        )
+            .trim()
+            .toLowerCase();
+
+
+    switch (
+        normalizedIntent
+    ) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Product Search
+        |--------------------------------------------------------------------------
+        */
+
+        case "product_search":
+
+        case "product_discovery":
+
+        case "browse_products":
+
+            return [
+
+                "Best Sellers",
+
+                "New Arrivals",
+
+                "Today's Deals",
+
+                "Browse Categories"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Pricing
+        |--------------------------------------------------------------------------
+        */
+
+        case "pricing":
+
+        case "price":
+
+            return [
+
+                "Budget Products",
+
+                "Premium Products",
+
+                "Show Discounts"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Shipping
+        |--------------------------------------------------------------------------
+        */
+
+        case "shipping":
+
+        case "shipping_info":
+
+        case "delivery":
+
+            return [
+
+                "Shipping Charges",
+
+                "Delivery Time",
+
+                "Track Order"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Returns / Exchange
+        |--------------------------------------------------------------------------
+        */
+
+        case "return":
+
+        case "returns":
+
+        case "return_exchange":
+
+        case "exchange":
+
+            return [
+
+                "Return Policy",
+
+                "Exchange Policy",
+
+                "Refund Status"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Order Tracking
+        |--------------------------------------------------------------------------
+        */
+
+        case "order_tracking":
+
+        case "track_order":
+
+            return [
+
+                "Track My Order",
+
+                "Order Status",
+
+                "Contact Support"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cart
+        |--------------------------------------------------------------------------
+        */
+
+        case "cart":
+
+        case "cart_recovery":
+
+        case "abandoned_cart":
+
+            return [
+
+                "View Cart",
+
+                "Checkout Now",
+
+                "Continue Shopping"
+
+            ];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Default
+        |--------------------------------------------------------------------------
+        */
+
+        default:
+
+            return [
+
+                "Browse Products",
+
+                "Contact Support",
+
+                "Track Order"
+
+            ];
+
+    }
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Actions
+|--------------------------------------------------------------------------
+|
+| Converts products into actionable frontend actions.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildActions(
+
+    products = []
+
+) {
+
+    if (
+        !Array.isArray(products)
+    ) {
+
+        return [];
+
+    }
+
+    return products.map(
+
+        product => ({
+
+            type:
+                "product",
+
+            title:
+                product.title ||
+                "",
+
+            label:
+                "View Product",
+
+            url:
+
+                product.url ||
+
+                (
+                    product.handle
+
+                        ? `/products/${product.handle}`
+
+                        : ""
+                ),
+
+            value:
+
+                product._id ||
+
+                product.id ||
+
+                product.shopifyProductId ||
+
+                null
+
+        })
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Cart Recovery Response
+|--------------------------------------------------------------------------
+*/
+
+export function buildCartRecovery(
+
+    cart = {}
+
+) {
+
+    const items =
+
+        Array.isArray(
+            cart.items
+        )
+
+            ? cart.items
+
+            : [];
+
+
+    const itemCount =
+
+        cart.itemCount !== undefined
+
+            ? Number(
+                cart.itemCount
+            )
+
+            : items.reduce(
+
+                (
+                    total,
+
+                    item
+
+                ) =>
+
+                    total +
+
+                    Number(
+                        item.quantity || 1
+                    ),
+
+                0
+
+            );
+
+
+    const cartValue =
+
+        cart.total ??
+
+        cart.subtotal ??
+
+        0;
+
+
+    return {
+
+        enabled:
+
+            items.length > 0,
+
+        message:
+
+            items.length > 0
+
+                ? `You still have ${items.length} item(s) waiting in your cart.`
+
+                : "",
+
+        checkoutUrl:
+
+            cart.checkoutUrl ||
+
+            "",
+
+        cartValue,
+
+        currency:
+
+            cart.currency ||
+
+            "USD",
+
+        itemCount,
+
+        items
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Upsell Response
+|--------------------------------------------------------------------------
+*/
+
+export function buildUpsellResponse(
+
+    products = []
+
+) {
+
+    const productCards =
+
+        buildProductCards(
+
+            products
+
+        );
+
+
+    return {
+
+        type:
+            "upsell",
+
+        enabled:
+
+            productCards.length > 0,
+
+        title:
+
+            "Upgrade Your Purchase",
+
+        message:
+
+            "Customers often choose these premium options.",
+
+        products:
+            productCards
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Cross-Sell Response
+|--------------------------------------------------------------------------
+*/
+
+export function buildCrossSellResponse(
+
+    products = []
+
+) {
+
+    const productCards =
+
+        buildProductCards(
+
+            products
+
+        );
+
+
+    return {
+
+        type:
+            "cross_sell",
+
+        enabled:
+
+            productCards.length > 0,
+
+        title:
+
+            "Complete Your Purchase",
+
+        message:
+
+            "These products pair perfectly with your selection.",
+
+        products:
+            productCards
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Format AI Response
+|--------------------------------------------------------------------------
+|
+| Creates the standardized response returned to the controller layer.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function formatResponse(
+
+    result = {}
+
+) {
+
+    const usage =
+
+        result.usage ||
+
+        {};
+
+
+    return {
+
+        success:
+
+            result.success !== false,
+
+        message:
+
+            result.content ||
+
+            result.outputText ||
+
+            "",
+
+        model:
+
+            result.model ||
+
+            "",
+
+        provider:
+
+            result.provider ||
+
+            "openai",
+
+        finishReason:
+
+            result.finishReason ||
+
+            "completed",
+
+        createdAt:
+
+            new Date(),
+
+        usage: {
+
+            inputTokens:
+
+                usage.inputTokens ||
+
+                usage.promptTokens ||
+
+                0,
+
+            outputTokens:
+
+                usage.outputTokens ||
+
+                usage.completionTokens ||
+
+                0,
+
+            totalTokens:
+
+                usage.totalTokens ||
+
+                0
+
+        },
+
+        cost:
+
+            result.cost ||
+
+            {
+
+                inputCost: 0,
+
+                outputCost: 0,
+
+                totalCost: 0
+
+            },
+
+        recommendations:
+
+            Array.isArray(
+                result.recommendations
+            )
+
+                ? result.recommendations
+
+                : [],
+
+        actions:
+
+            Array.isArray(
+                result.actions
+            )
+
+                ? result.actions
+
+                : [],
+
+        quickReplies:
+
+            Array.isArray(
+                result.quickReplies
+            )
+
+                ? result.quickReplies
+
+                : [],
+
+        metadata:
+
+            result.metadata ||
+
+            {}
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Calculate Token Usage
+|--------------------------------------------------------------------------
+|
+| Supports both:
+|
+| OpenAI Responses API:
+|   input_tokens
+|   output_tokens
+|
+| Legacy naming:
+|   prompt_tokens
+|   completion_tokens
+|
+|--------------------------------------------------------------------------
+*/
+
+export function calculateTokenUsage(
+
+    usage = {}
+
+) {
+
+    const promptTokens =
+
+        Number(
+
+            usage.inputTokens ||
+
+            usage.input_tokens ||
+
+            usage.promptTokens ||
+
+            usage.prompt_tokens ||
+
+            0
+
+        );
+
+
+    const completionTokens =
+
+        Number(
+
+            usage.outputTokens ||
+
+            usage.output_tokens ||
+
+            usage.completionTokens ||
+
+            usage.completion_tokens ||
+
+            0
+
+        );
+
+
+    const totalTokens =
+
+        Number(
+
+            usage.totalTokens ||
+
+            usage.total_tokens ||
+
+            (
+
+                promptTokens +
+
+                completionTokens
+
+            )
+
+        );
+
+
+    return {
+
+        promptTokens,
+
+        completionTokens,
+
+        totalTokens
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Calculate AI Cost
+|--------------------------------------------------------------------------
+|
+| Delegates pricing calculation to OpenAIService.
+|
+| This keeps model pricing in one place.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function calculateCost(
+
+    model,
+
+    usage = {}
+
+) {
+
+    const normalizedUsage =
+
+        calculateTokenUsage(
+
+            usage
+
+        );
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Convert internal usage format into OpenAIService format.
+    |--------------------------------------------------------------------------
+    */
+
+    const openAIUsage = {
+
+        inputTokens:
+
+            normalizedUsage.promptTokens,
+
+        outputTokens:
+
+            normalizedUsage.completionTokens,
+
+        totalTokens:
+
+            normalizedUsage.totalTokens
+
+    };
+
+
+    return OpenAIService
+        .calculateEstimatedCost(
+
+            model,
+
+            openAIUsage
+
+        );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Log AI Request
+|--------------------------------------------------------------------------
+|
+| Logs AI usage for operational monitoring.
+|
+| Do not log:
+|
+| - Customer message content
+| - Customer personal data
+| - API keys
+| - Full prompts
+| - Full AI responses
+|
+|--------------------------------------------------------------------------
+*/
+
+export function logAIRequest({
+
+    shopId,
+
+    conversationId,
+
+    visitorId,
+
+    model,
+
+    usage = {},
+
+    cost = {},
+
+    responseTime = 0
+
+} = {}) {
+
+    const normalizedUsage =
+
+        calculateTokenUsage(
+
+            usage
+
+        );
+
+
+    logger.info(
+
+        "AI_REQUEST",
+
+        {
+
+            event:
+                "AI_REQUEST",
+
+            timestamp:
+                new Date(),
+
+            shopId:
+                shopId || null,
+
+            conversationId:
+                conversationId || null,
+
+            visitorId:
+                visitorId || null,
+
+            model:
+                model || null,
+
+            usage: {
+
+                promptTokens:
+
+                    normalizedUsage
+                        .promptTokens,
+
+                completionTokens:
+
+                    normalizedUsage
+                        .completionTokens,
+
+                totalTokens:
+
+                    normalizedUsage
+                        .totalTokens
+
+            },
+
+            cost: {
+
+                inputCost:
+
+                    Number(
+                        cost.inputCost || 0
+                    ),
+
+                outputCost:
+
+                    Number(
+                        cost.outputCost || 0
+                    ),
+
+                totalCost:
+
+                    Number(
+                        cost.totalCost || 0
+                    )
+
+            },
+
+            responseTime:
+
+                Number(
+                    responseTime || 0
+                )
+
+        }
+
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Performance Metrics
+|--------------------------------------------------------------------------
+|
+| Calculates response performance and AI usage metrics.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildPerformanceMetrics({
+
+    startedAt,
+
+    finishedAt,
+
+    usage = {},
+
+    model
+
+} = {}) {
+
+    const startTime =
+
+        startedAt instanceof Date
+
+            ? startedAt.getTime()
+
+            : Number(
+                startedAt || Date.now()
+            );
+
+
+    const endTime =
+
+        finishedAt instanceof Date
+
+            ? finishedAt.getTime()
+
+            : Number(
+                finishedAt || Date.now()
+            );
+
+
+    const responseTime =
+
+        Math.max(
+
+            0,
+
+            endTime -
+
+            startTime
+
+        );
+
+
+    const tokens =
+
+        calculateTokenUsage(
+
+            usage
+
+        );
+
+
+    const cost =
+
+        calculateCost(
+
+            model,
+
+            usage
+
+        );
+
+
+    return {
+
+        responseTime,
+
+        promptTokens:
+
+            tokens.promptTokens,
+
+        completionTokens:
+
+            tokens.completionTokens,
+
+        totalTokens:
+
+            tokens.totalTokens,
+
+        inputCost:
+
+            cost.inputCost,
+
+        outputCost:
+
+            cost.outputCost,
+
+        totalCost:
+
+            cost.totalCost,
+
+        model:
+
+            model || null
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build AI Metadata
+|--------------------------------------------------------------------------
+|
+| Standard metadata attached to AI responses.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildAIMetadata({
+
+    plan,
+
+    model,
+
+    intent = null,
+
+    customerStage = null,
+
+    responseTime = 0
+
+} = {}) {
+
+    return {
+
+        plan:
+
+            normalizePlan(
+
+                plan
+
+            ),
+
+        model:
+
+            model || null,
+
+        intent:
+
+            typeof intent === "object"
+
+                ? intent?.intent ||
+
+                  null
+
+                : intent,
+
+        customerStage:
+
+            typeof intent === "object"
+
+                ? intent?.customerStage ||
+
+                  null
+
+                : customerStage,
+
+        responseTime:
+
+            Number(
+                responseTime || 0
+            )
+
+    };
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| Build Error Response
+|--------------------------------------------------------------------------
+|
+| Safe response used when the AI request cannot be completed.
+|
+| This prevents provider/internal errors from leaking to customers.
+|
+|--------------------------------------------------------------------------
+*/
+
+export function buildErrorResponse(
+
+    error = null
+
+) {
+
+    if (error) {
+
+        logger.error(
+
+            "Building AI error response",
+
+            {
+
+                message:
+                    error.message,
+
+                code:
+                    error.code,
+                status:
+                    error.status
+
+            }
+
+        );
+
+    }
+
+
+    return {
+
+        success:
+            false,
+
+        message:
+
+            "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
+
+        model:
+            null,
+
+        provider:
+            "openai",
+
+        finishReason:
+            "error",
+
+        createdAt:
+            new Date(),
+
+        usage: {
+
+            inputTokens:
+                0,
+
+            outputTokens:
+                0,
+
+            totalTokens:
+                0
+
+        },
+
+        cost: {
+
+            inputCost:
+                0,
+
+            outputCost:
+                0,
+
+            totalCost:
+                0
+
+        },
+
+        recommendations: [],
+
+        actions: [],
+
+        quickReplies: [
+
+            "Browse Products",
+
+            "Contact Support"
+
+        ],
+
+        metadata: {
+
+            error:
+                true
+
+        }
+
+    };
+
+}
